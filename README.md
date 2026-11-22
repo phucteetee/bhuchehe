@@ -10,7 +10,7 @@ Open `index.html` in any modern desktop or mobile browser.
 
 | Input | Action |
 | --- | --- |
-| `W A S D` / arrows | Move |
+| `W A S D` / arrows | Move (Always Sprint) |
 | Mouse | Aim |
 | Left mouse | Fire |
 | Right mouse / `G` | Throw tactical gadget (Frag / EMP / Smoke) |
@@ -55,6 +55,14 @@ Engineered to stay smooth on weak laptops/phones while scaling up for high-end P
   - Pure celestial planet operators (Mercury, Mars, Earth, Venus, Neptune, Jupiter, Uranus, Saturn) with distinct planetary surfaces, rings, craters, cloud bands, and signature aura — no facial features.
   - Cached radial light halos (High/Ultra), persistent battle decals (scorch craters & bullet chips), fading Sniper/Railgun ion beams, and crackling storm perimeter lightning arcs.
   - Delayed damage-drain HP bar and off-screen supply/grenade edge indicators.
+
+## Releases
+
+### v0.1.1
+- **AAA Tactical Lobby & UI Overhaul**: Full-viewport 3-column tactical lobby with esports top navigation bar (`PLAY` / `ARMORY` / `CAREER` / `SETTINGS`), animated orbital Planet Operator showcase pedestal, dedicated Settings overlay, chamfered `DROP IN` command dock, and armored in-game HUD plates with radar corner reticles.
+- **Always-Sprint Movement**: Removed manual `Shift` sprint toggling; operators now sprint automatically at full tactical pace.
+- **Full Armory Unlock**: All 8 celestial planet operators (Mercury, Mars, Earth, Venus, Neptune, Jupiter, Uranus, Saturn), all 5 movement trails, and `1,000,000` AURA unlocked by default.
+- **Damped-Spring Animations**: Frame-rate-independent exponential damping for gun recoil, camera kick/lead, walk-cycle bobbing, dash afterimages, and harmonic screen shake.
 
 ## Files
 

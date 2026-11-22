@@ -1301,6 +1301,25 @@ function drawOperatorPortrait(canvasElement, id) {
   portrait.stroke();
 }
 
+function drawPlanetShowcase(canvasElement, id) {
+  if (!canvasElement) return;
+  const c = canvasElement.getContext('2d');
+  const operator = OPERATOR_PRESETS[id] || OPERATOR_PRESETS.cyan;
+  const size = canvasElement.width;
+  const half = size / 2;
+  c.clearRect(0, 0, size, size);
+  const halo = c.createRadialGradient(half, half, size * 0.14, half, half, size * 0.49);
+  halo.addColorStop(0, operator.auraColor + '55');
+  halo.addColorStop(0.55, operator.auraColor + '1f');
+  halo.addColorStop(1, 'rgba(0,0,0,0)');
+  c.fillStyle = halo;
+  c.beginPath();
+  c.arc(half, half, size * 0.49, 0, TAU);
+  c.fill();
+  const inset = size * 0.05;
+  c.drawImage(getOperatorHead(id), inset, inset, size - inset * 2, size - inset * 2);
+}
+
 function drawAimLine() {
   const p = player;
   if (!p || !p.alive) return;

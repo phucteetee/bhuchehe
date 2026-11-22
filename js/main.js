@@ -56,6 +56,7 @@ function startMatch() {
   resetInput();
   if (typeof isCareerOpen === 'function' && isCareerOpen()) closeCareer();
   if (typeof isArmoryOpen === 'function' && isArmoryOpen()) closeArmory();
+  if (typeof isSettingsOpen === 'function' && isSettingsOpen()) closeSettings();
 
   obstacles = generateObstacles();
   rebuildObstacleGrid();
@@ -294,12 +295,14 @@ function togglePause() {
 }
 
 function handleEscape() {
+  if (typeof isSettingsOpen === 'function' && isSettingsOpen()) { closeSettings(); return; }
   if (typeof isArmoryOpen === 'function' && isArmoryOpen()) { closeArmory(); return; }
   if (typeof isCareerOpen === 'function' && isCareerOpen()) { closeCareer(); return; }
   if (game.state === 'playing' || game.state === 'countdown' || game.state === 'paused') togglePause();
 }
 
 function handleEnter() {
+  if (typeof isSettingsOpen === 'function' && isSettingsOpen()) return;
   if (typeof isArmoryOpen === 'function' && isArmoryOpen()) return;
   if (typeof isCareerOpen === 'function' && isCareerOpen()) return;
   if (game.state === 'menu' || game.state === 'over') startMatch();

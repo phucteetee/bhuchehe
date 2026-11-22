@@ -115,6 +115,23 @@ const PROFILE_UI = {
   rankNext: null,
   rankFill: null,
   contractList: null,
+  navPlayBtn: null,
+  armoryBtn: null,
+  careerBtn: null,
+  settingsBtn: null,
+  menuBankAura: null,
+  menuMiniPortrait: null,
+  menuHeaderOp: null,
+  showcaseCard: null,
+  menuShowcase: null,
+  menuOpName: null,
+  menuOpPlanet: null,
+  menuOpDesc: null,
+  menuTrailName: null,
+  menuQuickArmoryBtn: null,
+  menuQuickSettingsBtn: null,
+  settings: null,
+  settingsBackBtn: null,
   armory: null,
   armoryGrid: null,
   armoryAura: null,
@@ -500,6 +517,23 @@ function cacheProfileUI() {
   PROFILE_UI.rankNext = document.getElementById('rankNext');
   PROFILE_UI.rankFill = document.getElementById('rankFill');
   PROFILE_UI.contractList = document.getElementById('contractList');
+  PROFILE_UI.navPlayBtn = document.getElementById('navPlayBtn');
+  PROFILE_UI.armoryBtn = document.getElementById('armoryBtn');
+  PROFILE_UI.careerBtn = document.getElementById('careerBtn');
+  PROFILE_UI.settingsBtn = document.getElementById('settingsBtn');
+  PROFILE_UI.menuBankAura = document.getElementById('menuBankAura');
+  PROFILE_UI.menuMiniPortrait = document.getElementById('menuMiniPortrait');
+  PROFILE_UI.menuHeaderOp = document.getElementById('menuHeaderOp');
+  PROFILE_UI.showcaseCard = document.querySelector('.showcaseCard');
+  PROFILE_UI.menuShowcase = document.getElementById('menuShowcase');
+  PROFILE_UI.menuOpName = document.getElementById('menuOpName');
+  PROFILE_UI.menuOpPlanet = document.getElementById('menuOpPlanet');
+  PROFILE_UI.menuOpDesc = document.getElementById('menuOpDesc');
+  PROFILE_UI.menuTrailName = document.getElementById('menuTrailName');
+  PROFILE_UI.menuQuickArmoryBtn = document.getElementById('menuQuickArmoryBtn');
+  PROFILE_UI.menuQuickSettingsBtn = document.getElementById('menuQuickSettingsBtn');
+  PROFILE_UI.settings = document.getElementById('settings');
+  PROFILE_UI.settingsBackBtn = document.getElementById('settingsBackBtn');
   PROFILE_UI.armory = document.getElementById('armory');
   PROFILE_UI.armoryGrid = document.getElementById('armoryGrid');
   PROFILE_UI.armoryAura = document.getElementById('armoryAura');
@@ -521,8 +555,11 @@ function renderProfileUI() {
   if (!ui.rankBadge) return;
 
   const rank = getRank(p.auraEarned);
+  const opId = getEquippedOperatorId();
+  const operator = OPERATOR_PRESETS[opId] || OPERATOR_PRESETS.cyan;
+  const trail = getEquippedTrail();
+
   if (UI.operatorName) {
-    const operator = OPERATOR_PRESETS[p.equipped.operator] || OPERATOR_PRESETS.cyan;
     UI.operatorName.textContent = operator.name;
     UI.operatorName.style.color = operator.auraColor;
     UI.operatorName.style.textShadow = '0 0 12px ' + operator.auraColor + '88';
@@ -531,6 +568,33 @@ function renderProfileUI() {
   ui.rankBadge.style.color = rank.color;
   ui.rankBadge.style.borderColor = rank.color;
   ui.rankBadge.style.textShadow = '0 0 18px ' + rank.color + '66';
+  if (ui.menuBankAura) ui.menuBankAura.textContent = p.auraBank.toLocaleString('en-US');
+  if (ui.menuHeaderOp) {
+    ui.menuHeaderOp.textContent = operator.name;
+    ui.menuHeaderOp.style.color = operator.light;
+  }
+  if (ui.showcaseCard) ui.showcaseCard.style.setProperty('--op-aura', operator.auraColor);
+  if (ui.menuOpName) {
+    ui.menuOpName.textContent = operator.name;
+    ui.menuOpName.style.color = operator.light;
+    ui.menuOpName.style.textShadow = '0 0 18px ' + operator.auraColor + '66';
+  }
+  if (ui.menuOpPlanet) {
+    ui.menuOpPlanet.textContent = operator.planet + ' · ' + operator.planetType.toUpperCase();
+    ui.menuOpPlanet.style.color = operator.auraColor;
+  }
+  if (ui.menuOpDesc) ui.menuOpDesc.textContent = operator.desc;
+  if (ui.menuTrailName) {
+    ui.menuTrailName.textContent = trail.name;
+    ui.menuTrailName.style.color = trail.color;
+    ui.menuTrailName.style.borderColor = trail.color + '66';
+  }
+  if (ui.menuMiniPortrait && typeof drawOperatorPortrait === 'function') {
+    drawOperatorPortrait(ui.menuMiniPortrait, opId);
+  }
+  if (ui.menuShowcase && typeof drawPlanetShowcase === 'function') {
+    drawPlanetShowcase(ui.menuShowcase, opId);
+  }
   if (ui.lifetimeAura) ui.lifetimeAura.textContent = p.auraEarned.toLocaleString('en-US');
   if (ui.rankNext) {
     ui.rankNext.textContent = rank.next
@@ -606,7 +670,7 @@ function renderArmory() {
       html += '<div class="armoryCard' + (equipped ? ' isEquipped' : '') + '">' +
         preview +
         '<div class="armoryName">' + item.name + '</div>' +
-        '<div class="armoryType">' + (sec.kind === 'operator' ? 'OPERATOR' : 'TRAIL') + '</div>' +
+        '<div class="armoryType">' + (sec.kind === 'operator' ? (item.planet + ' · ' + item.planetType.toUpperCase()) : 'MOVEMENT TRAIL') + '</div>' +
         '<div class="armoryDesc">' + item.desc + '</div>' +
         '<button class="armoryBtn ' + cls + '" data-kind="' + sec.kind +
         '" data-id="' + id + '" data-action="' + action + '"' + (disabled ? ' disabled' : '') + '>' +
@@ -695,6 +759,14 @@ function renderCareer() {
   }
 }
 
+function setActiveLobbyTab(tab) {
+  const ui = PROFILE_UI;
+  if (ui.navPlayBtn) ui.navPlayBtn.classList.toggle('active', tab === 'play');
+  if (ui.armoryBtn) ui.armoryBtn.classList.toggle('active', tab === 'armory');
+  if (ui.careerBtn) ui.careerBtn.classList.toggle('active', tab === 'career');
+  if (ui.settingsBtn) ui.settingsBtn.classList.toggle('active', tab === 'settings');
+}
+
 function isArmoryOpen() {
   return !!(PROFILE_UI.armory && !PROFILE_UI.armory.classList.contains('hidden'));
 }
@@ -703,37 +775,97 @@ function isCareerOpen() {
   return !!(PROFILE_UI.career && !PROFILE_UI.career.classList.contains('hidden'));
 }
 
+function isSettingsOpen() {
+  return !!(PROFILE_UI.settings && !PROFILE_UI.settings.classList.contains('hidden'));
+}
+
+function closeAllLobbyOverlays() {
+  if (PROFILE_UI.armory) PROFILE_UI.armory.classList.add('hidden');
+  if (PROFILE_UI.career) PROFILE_UI.career.classList.add('hidden');
+  if (PROFILE_UI.settings) PROFILE_UI.settings.classList.add('hidden');
+  setActiveLobbyTab('play');
+  renderProfileUI();
+}
+
 function openArmory() {
   if (game.state !== 'menu') return;
+  if (PROFILE_UI.career) PROFILE_UI.career.classList.add('hidden');
+  if (PROFILE_UI.settings) PROFILE_UI.settings.classList.add('hidden');
   ensureDailyChallenges();
   renderArmory();
   if (PROFILE_UI.armory) PROFILE_UI.armory.classList.remove('hidden');
+  setActiveLobbyTab('armory');
+  if (typeof sfx === 'function') sfx('ui');
 }
 
 function closeArmory() {
   if (PROFILE_UI.armory) PROFILE_UI.armory.classList.add('hidden');
+  setActiveLobbyTab('play');
   renderProfileUI();
 }
 
 function openCareer() {
   if (game.state !== 'menu') return;
+  if (PROFILE_UI.armory) PROFILE_UI.armory.classList.add('hidden');
+  if (PROFILE_UI.settings) PROFILE_UI.settings.classList.add('hidden');
   ensureDailyChallenges();
   renderCareer();
   if (PROFILE_UI.career) PROFILE_UI.career.classList.remove('hidden');
+  setActiveLobbyTab('career');
+  if (typeof sfx === 'function') sfx('ui');
 }
 
 function closeCareer() {
   if (PROFILE_UI.career) PROFILE_UI.career.classList.add('hidden');
+  setActiveLobbyTab('play');
+  renderProfileUI();
+}
+
+function openSettings() {
+  if (game.state !== 'menu') return;
+  if (PROFILE_UI.armory) PROFILE_UI.armory.classList.add('hidden');
+  if (PROFILE_UI.career) PROFILE_UI.career.classList.add('hidden');
+  if (typeof updateGraphicsQualityUI === 'function') updateGraphicsQualityUI();
+  if (typeof updateAudioSettingsUI === 'function') updateAudioSettingsUI();
+  if (typeof updateFpsToggleUI === 'function') updateFpsToggleUI();
+  if (PROFILE_UI.settings) PROFILE_UI.settings.classList.remove('hidden');
+  setActiveLobbyTab('settings');
+  if (typeof sfx === 'function') sfx('ui');
+}
+
+function closeSettings() {
+  if (PROFILE_UI.settings) PROFILE_UI.settings.classList.add('hidden');
+  setActiveLobbyTab('play');
   renderProfileUI();
 }
 
 function wireProfileUI() {
-  const armoryBtn = document.getElementById('armoryBtn');
-  const careerBtn = document.getElementById('careerBtn');
-  if (armoryBtn) armoryBtn.addEventListener('click', openArmory);
-  if (careerBtn) careerBtn.addEventListener('click', openCareer);
+  if (PROFILE_UI.navPlayBtn) PROFILE_UI.navPlayBtn.addEventListener('click', closeAllLobbyOverlays);
+  if (PROFILE_UI.armoryBtn) PROFILE_UI.armoryBtn.addEventListener('click', openArmory);
+  if (PROFILE_UI.careerBtn) PROFILE_UI.careerBtn.addEventListener('click', openCareer);
+  if (PROFILE_UI.settingsBtn) PROFILE_UI.settingsBtn.addEventListener('click', openSettings);
+  if (PROFILE_UI.menuQuickArmoryBtn) PROFILE_UI.menuQuickArmoryBtn.addEventListener('click', openArmory);
+  if (PROFILE_UI.menuQuickSettingsBtn) PROFILE_UI.menuQuickSettingsBtn.addEventListener('click', openSettings);
   if (PROFILE_UI.armoryBackBtn) PROFILE_UI.armoryBackBtn.addEventListener('click', closeArmory);
   if (PROFILE_UI.careerBackBtn) PROFILE_UI.careerBackBtn.addEventListener('click', closeCareer);
+  if (PROFILE_UI.settingsBackBtn) PROFILE_UI.settingsBackBtn.addEventListener('click', closeSettings);
+
+  // Clicking outside the modal panel closes the overlay cleanly.
+  if (PROFILE_UI.armory) {
+    PROFILE_UI.armory.addEventListener('click', (e) => {
+      if (e.target === PROFILE_UI.armory) closeArmory();
+    });
+  }
+  if (PROFILE_UI.career) {
+    PROFILE_UI.career.addEventListener('click', (e) => {
+      if (e.target === PROFILE_UI.career) closeCareer();
+    });
+  }
+  if (PROFILE_UI.settings) {
+    PROFILE_UI.settings.addEventListener('click', (e) => {
+      if (e.target === PROFILE_UI.settings) closeSettings();
+    });
+  }
 
   if (PROFILE_UI.armoryGrid) {
     PROFILE_UI.armoryGrid.addEventListener('click', (e) => {

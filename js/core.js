@@ -515,6 +515,8 @@ function updateGraphicsQualityUI() {
       ? fpsPart + 'AUTO → ' + effLabel
       : fpsPart + (userPrefs.autoAdapt ? 'AUTO ADAPT ON' : 'LOCKED · ' + effLabel);
   }
+  const perfTier = document.getElementById('menuPerfTier');
+  if (perfTier) perfTier.textContent = 'GRAPHICS · ' + effLabel;
   if (UI.fpsBadge && userPrefs.showFps) {
     const scalePct = Math.round(DPR * 100);
     UI.fpsBadge.textContent = (liveFps || '--') + ' FPS · ' + effLabel + ' · ' + scalePct + '%';
