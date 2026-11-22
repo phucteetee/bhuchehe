@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+<title>BATTLEGROUND — Last One Standing</title>
+<link rel="stylesheet" href="style.css?v=6" />
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="ui">
+  <div id="fpsBadge" class="hidden" aria-live="off">60 FPS · MED</div>
+
+  <div id="topbar">
+    <div class="pill"><span class="dot"></span><b id="aliveCount">20</b><span>ALIVE</span></div>
+    <div class="pill zone"><span class="zoneIcon"></span><span id="zoneText">ZONE SHRINKS IN 18s</span></div>
+    <div class="pill supply"><span class="supplyIcon"></span><span id="supplyText">CACHE 01:00</span></div>
+    <div class="pill"><b id="killCount">0</b><span>ELIMS</span></div>
+    <div class="pill aura" id="auraPill"><span class="auraStar">✦</span><b id="auraCount">0</b><span>AURA</span></div>
+  </div>
+
+  <div id="minimapWrap">
+    <canvas id="minimap" width="200" height="200"></canvas>
+    <div id="minimapLabel">BATTLEGROUND</div>
+  </div>
+
+  <div id="feed"></div>
+
+  <div id="stormWarn"><span>!</span><i id="warnArrow" aria-hidden="true"></i> <em>GET INSIDE THE ZONE</em> <b id="warnDist">0m</b></div>
+
+  <div id="pickupPrompt" class="hidden" aria-live="polite">
+    <kbd id="pickupKey">E</kbd>
+    <div class="pickupMeta">
+      <div id="pickupTitle">SWAP GOLD RIFLE (+12%)</div>
+      <small id="pickupSub">TIER 3 · DMG 38 · HIGH IMPACT</small>
+    </div>
+  </div>
+
+  <div id="bottomLeft">
+    <div class="playerTag">
+      <canvas id="hudPortrait" width="52" height="52" aria-hidden="true"></canvas>
+      <div class="playerMeta"><em>OPERATOR</em> <span id="operatorName">KAI</span><small id="hudBuff">COMBAT READY</small></div>
+    </div>
+    <div class="statRow"><span class="lbl">HP</span><div class="bar hp"><div id="hpTrail" class="trail"></div><div id="hpFill" class="fill"></div></div><b id="hpText">100</b></div>
+    <div class="statRow"><span class="lbl">ARM</span><div class="bar armor"><div id="armorFill" class="fill"></div></div><b id="armorText">0</b></div>
+  </div>
+
+  <div id="bottomRight">
+    <div id="loadoutBar">
+      <div class="slotCard active" id="slot0" data-slot="0">
+        <span class="slotKey">1</span>
+        <div class="slotInfo"><b id="slot0Name">PISTOL</b><small id="slot0Mag">12</small></div>
+      </div>
+      <div class="slotCard empty" id="slot1" data-slot="1">
+        <span class="slotKey">2</span>
+        <div class="slotInfo"><b id="slot1Name">EMPTY</b><small id="slot1Mag">—</small></div>
+      </div>
+      <div class="slotCard gadget" id="gadgetSlot">
+        <span class="slotKey">G</span>
+        <div class="slotInfo"><b id="gadgetName">FRAG</b><small id="gadgetCount">×2</small></div>
+      </div>
+    </div>
+    <canvas id="hudWeapon" width="150" height="44" aria-hidden="true"></canvas>
+    <div id="weaponName">PISTOL</div>
+    <div id="skinName">FACTORY FINISH</div>
+    <div id="ammoRow"><span id="mag">12</span><span class="slash">/</span><span class="inf">∞</span></div>
+    <div id="reloadWrap"><div id="reloadFill"></div></div>
+    <div id="dashHint" class="ready"><span id="dashLabel">SPACE · DASH READY</span></div>
+  </div>
+
+  <div id="streakBanner"><b id="streakCount">2</b><span>ELIMINATION STREAK</span></div>
+  <div id="vignette"></div>
+  <div id="stormVignette"></div>
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<div id="mobileControls" aria-label="Touch controls">
+  <div id="moveStick" class="touchStick leftStick" aria-label="Move">
+    <div class="touchStickRing"></div>
+    <div id="moveStickKnob" class="touchStickKnob"></div>
+  </div>
+  <div id="aimStick" class="touchStick rightStick" aria-label="Aim and Fire">
+    <div class="touchStickRing fireRing"></div>
+    <div id="aimStickKnob" class="touchStickKnob fireKnob"><span></span></div>
+  </div>
+  <button id="reloadTouch" class="touchAction reloadAction" type="button" aria-label="Reload">R</button>
+  <button id="dashTouch" class="touchAction dashAction" type="button" aria-label="Dash">DASH</button>
+  <button id="gadgetTouch" class="touchAction gadgetAction" type="button" aria-label="Gadget">FRAG</button>
+  <button id="swapTouch" class="touchAction swapAction" type="button" aria-label="Swap weapon">SWAP</button>
+  <button id="interactTouch" class="touchAction interactAction hidden" type="button" aria-label="Pick up weapon">E</button>
+  <button id="pauseTouch" class="touchAction pauseAction" type="button" aria-label="Pause">II</button>
+</div>
+
+<div id="countdown" class="hidden"><span>3</span></div>
+
+<div id="menu" class="screen">
+  <div class="menuInner">
+    <div class="menuTopTools">
+      <button type="button" class="miniChip" data-fps-toggle aria-pressed="false">FPS HUD: OFF</button>
+    </div>
+    <div class="eyebrow">TACTICAL BATTLE ROYALE</div>
+    <h1>BATTLE<span>GROUND</span></h1>
+    <p class="tagline">Dual-weapon combat, tactical gadgets, destructible cover, and a shrinking storm. Be the last operator standing.</p>
+
+    <div class="profileStrip">
+      <div class="rankBadge" id="rankBadge">ROOKIE</div>
+      <div class="profileMeter">
+        <div class="profileLine"><b id="lifetimeAura">0</b><span>LIFETIME AURA</span><i id="rankNext">10,000 TO BRONZE</i></div>
+        <div class="rankBar"><div id="rankFill"></div></div>
+      </div>
+    </div>
+
+    <div class="deployDeck">
+      <div class="deckGroup">
+        <span class="deckLabel">MATCH MODE</span>
+        <div class="chipRow" id="modeOptions">
+          <button type="button" data-mode="classic" class="selected" aria-pressed="true">ROYALE</button>
+          <button type="button" data-mode="blitz" aria-pressed="false">BLITZ</button>
+          <button type="button" data-mode="hardcore" aria-pressed="false">ELITE OPS</button>
+        </div>
+        <small id="modeDesc">20 operators · Classic storm &amp; supply caches</small>
+      </div>
+      <div class="deckGroup">
+        <span class="deckLabel">TACTICAL KIT</span>
+        <div class="chipRow" id="perkOptions">
+          <button type="button" data-perk="vanguard" class="selected" aria-pressed="true">VANGUARD</button>
+          <button type="button" data-perk="striker" aria-pressed="false">STRIKER</button>
+          <button type="button" data-perk="scout" aria-pressed="false">SCOUT</button>
+          <button type="button" data-perk="medic" aria-pressed="false">MEDIC</button>
+        </div>
+        <small id="perkDesc">Start with +30 Armor &amp; 90 Max Armor</small>
+      </div>
+    </div>
+
+    <div class="contracts">
+      <div class="contractsHead"><span>DAILY CONTRACTS</span><span>RESET AT MIDNIGHT</span></div>
+      <div id="contractList"></div>
+    </div>
+
+    <div class="controls">
+      <div class="ctrl"><kbd>W A S D</kbd><span>Move</span></div>
+      <div class="ctrl"><kbd>LMB / RMB</kbd><span>Fire &amp; Gadget</span></div>
+      <div class="ctrl"><kbd>1 2 / Q</kbd><span>Switch Gun</span></div>
+      <div class="ctrl"><kbd>E / R</kbd><span>Loot / Reload</span></div>
+      <div class="ctrl"><kbd>SHIFT</kbd><span>Sprint</span></div>
+      <div class="ctrl"><kbd>SPACE</kbd><span>Dash · i-frames</span></div>
+    </div>
+
+    <div class="settingsGrid">
+      <div class="qualityControl" aria-label="Graphics quality">
+        <span>GRAPHICS</span>
+        <div class="qualityOptions">
+          <button type="button" data-quality="verylow" aria-pressed="false">POTATO</button>
+          <button type="button" data-quality="low" aria-pressed="false">LOW</button>
+          <button type="button" data-quality="medium" aria-pressed="true">MED</button>
+          <button type="button" data-quality="high" aria-pressed="false">HIGH</button>
+          <button type="button" data-quality="ultra" aria-pressed="false">ULTRA</button>
+        </div>
+        <div class="qualityMetaRow">
+          <small data-quality-status>FPS — · AUTO ADAPT ON</small>
+          <div class="qualityMiniBtns">
+            <button type="button" class="miniChip" data-quality-auto>AUTO DETECT</button>
+            <button type="button" class="miniChip active" data-adapt-toggle aria-pressed="true">ADAPT: ON</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="audioControl" aria-label="Audio settings">
+        <span>AUDIO</span>
+        <button type="button" data-audio-toggle aria-pressed="true">MUSIC ON</button>
+        <label class="volumeWrap" aria-label="Master volume">
+          <input type="range" min="0" max="100" value="70" data-audio-volume />
+        </label>
+        <small data-audio-status>MUSIC ON · 70% VOLUME</small>
+      </div>
+    </div>
+
+    <div class="btnRow">
+      <button id="playBtn" class="bigBtn"><em>DROP IN</em> <span>&rarr;</span></button>
+      <button id="careerBtn" class="ghostBtn">CAREER</button>
+      <button id="armoryBtn" class="ghostBtn">ARMORY</button>
+    </div>
+    <p class="hint">Shoot crates &amp; fuel barrels · Center hits deal CRIT damage · Press <kbd>M</kbd> to mute</p>
+  </div>
+</div>
+
+<div id="armory" class="screen hidden">
+  <div class="panel armoryPanel">
+    <div class="eyebrow">OPERATOR ARMORY</div>
+    <h2>PLANET ROSTER</h2>
+    <div class="armoryTop"><span>AVAILABLE AURA</span><b id="armoryAura">0</b></div>
+    <p class="armoryIntro">8 PLANET OPERATORS · DISTINCT PLANETARY SURFACES · SIGNATURE AURA COLORS · COSMETIC ONLY</p>
+    <div id="armoryGrid" class="armoryGrid"></div>
+    <button id="armoryBackBtn" class="ghostBtn">BACK TO MENU</button>
+  </div>
+</div>
+
+<div id="career" class="screen hidden">
+  <div class="panel careerPanel">
+    <div class="eyebrow">SERVICE RECORD</div>
+    <h2>CAREER</h2>
+    <div class="profileStrip careerStrip">
+      <div class="rankBadge" id="careerRankBadge">ROOKIE</div>
+      <div class="profileMeter">
+        <div class="profileLine"><b id="careerLifetime">0</b><span>LIFETIME AURA</span><i id="careerRankNext">10,000 TO BRONZE</i></div>
+        <div class="rankBar"><div id="careerRankFill"></div></div>
+      </div>
+      <div class="careerBank"><span>AVAILABLE</span><b id="careerBank">0</b></div>
+    </div>
+    <div id="careerStats" class="careerStats"></div>
+    <div class="careerMastery">
+      <div class="careerHead">WEAPON MASTERY</div>
+      <div id="careerWeapons" class="careerWeapons"></div>
+    </div>
+    <button id="careerBackBtn" class="ghostBtn">BACK TO MENU</button>
+  </div>
+</div>
+
+<div id="pause" class="screen hidden">
+  <div class="panel">
+    <div class="menuTopTools">
+      <button type="button" class="miniChip" data-fps-toggle aria-pressed="false">FPS HUD: OFF</button>
+    </div>
+    <div class="eyebrow">MATCH PAUSED</div>
+    <h2>HOLD POSITION</h2>
+    <div class="controls compact">
+      <div class="ctrl"><kbd>1 2 / Q</kbd><span>Switch Gun</span></div>
+      <div class="ctrl"><kbd>RMB / G</kbd><span>Throw Gadget</span></div>
+      <div class="ctrl"><kbd>E / R</kbd><span>Loot / Reload</span></div>
+    </div>
+    <div class="qualityControl compactQuality" aria-label="Graphics quality">
+      <span>GRAPHICS</span>
+      <div class="qualityOptions">
+        <button type="button" data-quality="verylow" aria-pressed="false">POTATO</button>
+        <button type="button" data-quality="low" aria-pressed="false">LOW</button>
+        <button type="button" data-quality="medium" aria-pressed="true">MED</button>
+        <button type="button" data-quality="high" aria-pressed="false">HIGH</button>
+        <button type="button" data-quality="ultra" aria-pressed="false">ULTRA</button>
+      </div>
+      <div class="qualityMetaRow">
+        <small data-quality-status>FPS — · AUTO ADAPT ON</small>
+        <div class="qualityMiniBtns">
+          <button type="button" class="miniChip active" data-adapt-toggle aria-pressed="true">ADAPT: ON</button>
+        </div>
+      </div>
+    </div>
+    <div class="audioControl compactAudio" aria-label="Audio settings">
+      <span>AUDIO</span>
+      <button type="button" data-audio-toggle aria-pressed="true">MUSIC ON</button>
+      <label class="volumeWrap" aria-label="Master volume">
+        <input type="range" min="0" max="100" value="70" data-audio-volume />
+      </label>
+      <small data-audio-status>MUSIC ON · 70% VOLUME</small>
+    </div>
+    <div class="btnRow">
+      <button id="resumeBtn" class="bigBtn"><em>RESUME</em> <span>&rarr;</span></button>
+      <button id="quitBtn" class="ghostBtn">QUIT TO MENU</button>
+    </div>
+    <p class="hint">Quitting forfeits unbanked AURA</p>
+  </div>
+</div>
+
+<div id="end" class="screen hidden">
+  <div class="menuInner">
+    <div class="eyebrow" id="endEyebrow">MATCH OVER</div>
+    <h2 id="endTitle">ELIMINATED</h2>
+    <div class="endStats">
+      <div><span>PLACEMENT</span><b id="endPlace">#5</b></div>
+      <div><span>ELIMINATIONS</span><b id="endKills">0</b></div>
+      <div><span>MATCH AURA</span><b id="endAura">0</b></div>
+      <div><span>SURVIVED</span><b id="endTime">0:00</b></div>
+      <div><span>DAMAGE</span><b id="endDamage">0</b></div>
+      <div><span>ACCURACY</span><b id="endAccuracy">0%</b></div>
+      <div><span>CRIT HITS</span><b id="endCrits">0</b></div>
+      <div><span>LONGEST SHOT</span><b id="endLongshot">—</b></div>
+      <div><span>LIFETIME AURA</span><b id="endLifetime">0</b></div>
+    </div>
+    <div id="endRank" class="rankLine">ROOKIE</div>
+    <div id="endPromo" class="promoLine"></div>
+    <div id="endRecord" class="recordLine"></div>
+    <div id="endContracts" class="contractLine"></div>
+    <div class="btnRow" style="margin-top:18px">
+      <button id="againBtn" class="bigBtn"><em>PLAY AGAIN</em> <span>&#8635;</span></button>
+      <button id="endMenuBtn" class="ghostBtn">BACK TO MENU</button>
+    </div>
+    <p class="hint">Press <kbd>ENTER</kbd> to redeploy</p>
+  </div>
+</div>
+
+<script src="js/core.js?v=6"></script>
+<script src="js/profile.js?v=6"></script>
+<script src="js/combat.js?v=6"></script>
+<script src="js/render.js?v=6"></script>
+<script src="js/main.js?v=6"></script>
+</body>
+</html>
