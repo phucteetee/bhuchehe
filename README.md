@@ -17,7 +17,6 @@ Open `index.html` in any modern desktop or mobile browser.
 | `1` / `2` / `Q` / Mouse wheel | Switch weapon slots |
 | `E` | Swap nearby weapon or gadget |
 | `R` | Reload |
-| `Shift` | Sprint |
 | `Space` | Dash (brief i-frames) |
 | `Esc` | Pause |
 | `M` | Mute / unmute |

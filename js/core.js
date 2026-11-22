@@ -1184,7 +1184,7 @@ function updateCamera(dt) {
   if (!REDUCED_MOTION && player && player.alive && game.state === 'playing') {
     if (player.dashT > 0) speedZoom = -0.022;
     else if (player.speedBoostT > 0) speedZoom = -0.015;
-    else if ((keys.ShiftLeft || keys.ShiftRight) && Math.hypot(player.vx || 0, player.vy || 0) > 120) {
+    else if (Math.hypot(player.vx || 0, player.vy || 0) > 120) {
       speedZoom = -0.01;
     }
   }

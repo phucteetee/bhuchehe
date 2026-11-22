@@ -1095,7 +1095,7 @@ function updatePlayer(dt) {
 
   const slowMul = p.slowT > 0 ? 0.62 : 1;
   const boostMul = p.speedBoostT > 0 ? 1.18 : 1;
-  const sprint = (keys.ShiftLeft || keys.ShiftRight) ? 1.32 : 1;
+  const sprint = 1.32;
 
   // Smooth exponential acceleration & deceleration — tight response, zero jarring snaps.
   let targetVx = 0;
@@ -1124,10 +1124,10 @@ function updatePlayer(dt) {
           rand(2.5, 4.8), '#8fa6ad', 3);
       }
     }
-    if (sprint > 1 && (dx || dy) && getGraphicsSettings().fx >= 1 && !REDUCED_MOTION) {
+    if ((dx || dy) && getGraphicsSettings().fx >= 1 && !REDUCED_MOTION) {
       p.sprintT -= dt;
       if (p.sprintT <= 0) {
-        p.sprintT = 0.085;
+        p.sprintT = 0.11;
         const ux = p.vx / speedNow;
         const uy = p.vy / speedNow;
         spawnParticle('dash', p.x - ux * (p.r + 6), p.y - uy * (p.r + 6),
