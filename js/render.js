@@ -129,19 +129,21 @@ function buildGroundLayer() {
     g.strokeRect(r.x, r.y, r.w, r.h);
   }
 
-  // Road intersection crosswalks
-  const ix = ROADS[0].x;
-  const iy = ROADS[1].y;
-  const iw = ROADS[0].w;
-  const ih = ROADS[1].h;
+  // Road intersection crosswalks (all vertical × horizontal road crossings)
+  const vRoads = ROADS.filter((r) => r.h > r.w);
+  const hRoads = ROADS.filter((r) => r.w >= r.h);
   g.fillStyle = 'rgba(195,228,240,0.09)';
-  for (let s = 18; s < iw - 18; s += 22) {
-    g.fillRect(ix + s, iy - 22, 12, 16);
-    g.fillRect(ix + s, iy + ih + 6, 12, 16);
-  }
-  for (let s = 18; s < ih - 18; s += 22) {
-    g.fillRect(ix - 22, iy + s, 16, 12);
-    g.fillRect(ix + iw + 6, iy + s, 16, 12);
+  for (const vr of vRoads) {
+    for (const hr of hRoads) {
+      for (let s = 18; s < vr.w - 18; s += 22) {
+        g.fillRect(vr.x + s, hr.y - 22, 12, 16);
+        g.fillRect(vr.x + s, hr.y + hr.h + 6, 12, 16);
+      }
+      for (let s = 18; s < hr.h - 18; s += 22) {
+        g.fillRect(vr.x - 22, hr.y + s, 16, 12);
+        g.fillRect(vr.x + vr.w + 6, hr.y + s, 16, 12);
+      }
+    }
   }
 
   g.save();
@@ -149,10 +151,14 @@ function buildGroundLayer() {
   g.lineWidth = 2.5;
   g.setLineDash([32, 28]);
   g.beginPath();
-  g.moveTo(ROADS[0].x + ROADS[0].w / 2, 0);
-  g.lineTo(ROADS[0].x + ROADS[0].w / 2, WORLD);
-  g.moveTo(0, ROADS[1].y + ROADS[1].h / 2);
-  g.lineTo(WORLD, ROADS[1].y + ROADS[1].h / 2);
+  for (const vr of vRoads) {
+    g.moveTo(vr.x + vr.w / 2, 0);
+    g.lineTo(vr.x + vr.w / 2, WORLD);
+  }
+  for (const hr of hRoads) {
+    g.moveTo(0, hr.y + hr.h / 2);
+    g.lineTo(WORLD, hr.y + hr.h / 2);
+  }
   g.stroke();
   g.restore();
 
@@ -160,10 +166,14 @@ function buildGroundLayer() {
   g.strokeStyle = 'rgba(94,231,255,0.15)';
   g.lineWidth = 2;
   g.beginPath();
-  g.moveTo(ROADS[0].x + 12, 0); g.lineTo(ROADS[0].x + 12, WORLD);
-  g.moveTo(ROADS[0].x + ROADS[0].w - 12, 0); g.lineTo(ROADS[0].x + ROADS[0].w - 12, WORLD);
-  g.moveTo(0, ROADS[1].y + 12); g.lineTo(WORLD, ROADS[1].y + 12);
-  g.moveTo(0, ROADS[1].y + ROADS[1].h - 12); g.lineTo(WORLD, ROADS[1].y + ROADS[1].h - 12);
+  for (const vr of vRoads) {
+    g.moveTo(vr.x + 12, 0); g.lineTo(vr.x + 12, WORLD);
+    g.moveTo(vr.x + vr.w - 12, 0); g.lineTo(vr.x + vr.w - 12, WORLD);
+  }
+  for (const hr of hRoads) {
+    g.moveTo(0, hr.y + 12); g.lineTo(WORLD, hr.y + 12);
+    g.moveTo(0, hr.y + hr.h - 12); g.lineTo(WORLD, hr.y + hr.h - 12);
+  }
   g.stroke();
   g.restore();
 
@@ -2361,7 +2371,7 @@ function drawZoneOverlay() {
 
 /* Off-screen Supply Drop & Danger Grenade edge pointers */
 function drawOffscreenIndicators() {
-  if (!player || !player.alive || game.state !== 'playing') return;
+  if (!player || !player.alive || player.inSafeZone || game.state !== 'playing') return;
   const pad = 42;
   ctx.save();
   // Active Supply Drops
@@ -2600,6 +2610,307 @@ function drawDamageIndicator() {
 }
 
 /* ---------------------------------------------------------
+   Practice Safe Zone Sanctuary (Armory Pedestals, Dummies & Portal)
+   --------------------------------------------------------- */
+function drawSafeZone() {
+  if (!isPracticeMode()) return;
+  const v = viewBounds(140);
+  const sz = SAFE_ZONE;
+  if (sz.x + sz.w < v.l || sz.x > v.r || sz.y + sz.h < v.t || sz.y > v.b) return;
+  const t = game.time;
+
+  ctx.save();
+  // Sanctuary armored floor deck
+  ctx.fillStyle = 'rgba(7,19,28,0.92)';
+  rr(ctx, sz.x, sz.y, sz.w, sz.h, 14);
+  ctx.fill();
+
+  // Subtle cyan sanctuary grid inside deck
+  ctx.strokeStyle = 'rgba(94,231,255,0.065)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let gx = sz.x + 60; gx < sz.x + sz.w; gx += 60) {
+    ctx.moveTo(gx, sz.y + 8); ctx.lineTo(gx, sz.y + sz.h - 8);
+  }
+  for (let gy = sz.y + 60; gy < sz.y + sz.h; gy += 60) {
+    ctx.moveTo(sz.x + 8, gy); ctx.lineTo(sz.x + sz.w - 8, gy);
+  }
+  ctx.stroke();
+
+  // Firing range bay divider line
+  const rangeX = sz.x + 768;
+  ctx.strokeStyle = 'rgba(255,159,69,0.22)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([8, 8]);
+  ctx.beginPath();
+  ctx.moveTo(rangeX, sz.y + 38);
+  ctx.lineTo(rangeX, sz.y + 440);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Floor headers
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.font = '800 13px "Segoe UI", system-ui, sans-serif';
+  ctx.fillStyle = 'rgba(94,231,255,0.55)';
+  ctx.fillText('SAFE ZONE · FREE WEAPON ARMORY', sz.x + 24, sz.y + 18);
+  ctx.font = '700 9.5px "Segoe UI", system-ui, sans-serif';
+  ctx.fillStyle = 'rgba(170,210,226,0.45)';
+  ctx.fillText('WALK UP & PRESS [E] OR USE QUICK LOADOUT · STEP ON PORTAL OR PRESS [T] TO DEPLOY', sz.x + 24, sz.y + 37);
+
+  ctx.textAlign = 'center';
+  ctx.font = '800 10px "Segoe UI", system-ui, sans-serif';
+  ctx.fillStyle = 'rgba(255,179,71,0.58)';
+  ctx.fillText('FIRING RANGE', sz.x + 860, sz.y + 46);
+
+  // Glowing force-field perimeter wall
+  const pulse = 0.5 + 0.5 * Math.sin(t * 3.2);
+  ctx.strokeStyle = `rgba(94,231,255,${0.2 + pulse * 0.12})`;
+  ctx.lineWidth = 10;
+  rr(ctx, sz.x, sz.y, sz.w, sz.h, 14);
+  ctx.stroke();
+  ctx.strokeStyle = '#5ee7ff';
+  ctx.lineWidth = 2.6;
+  rr(ctx, sz.x, sz.y, sz.w, sz.h, 14);
+  ctx.stroke();
+  ctx.setLineDash([14, 14]);
+  ctx.lineDashOffset = -t * 26;
+  ctx.strokeStyle = 'rgba(200,248,255,0.75)';
+  ctx.lineWidth = 1.2;
+  rr(ctx, sz.x + 5, sz.y + 5, sz.w - 10, sz.h - 10, 10);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Interactive Weapon, Gadget & Skin Forge Pedestals
+  for (let i = 0; i < safeZoneStations.length; i++) {
+    const st = safeZoneStations[i];
+    const near = game.nearStation === st;
+    const isWeapon = st.kind === 'weapon';
+    const isGadget = st.kind === 'gadget';
+    const w = isWeapon ? WEAPONS[st.weapon] : null;
+    const g = isGadget ? GADGETS[st.gadget] : null;
+    const col = isWeapon ? w.color : isGadget ? g.color : skinInfo(player ? player.skin : 'gold').color;
+    const activeEquip = player && ((isWeapon && player.weapon === st.weapon) || (isGadget && player.gadget === st.gadget));
+
+    ctx.save();
+    ctx.translate(st.x, st.y);
+    ctx.fillStyle = near ? 'rgba(20,44,60,0.95)' : 'rgba(9,18,26,0.9)';
+    ctx.beginPath();
+    ctx.arc(0, 0, st.r + (near ? 3 : 0), 0, TAU);
+    ctx.fill();
+    ctx.strokeStyle = near ? '#ffffff' : activeEquip ? '#ffd166' : col;
+    ctx.lineWidth = near || activeEquip ? 2.4 : 1.6;
+    ctx.stroke();
+
+    if (isWeapon) {
+      const L = w.len + 20;
+      const sc = Math.min(0.46, 26 / L);
+      ctx.save();
+      ctx.rotate(-0.28);
+      ctx.scale(sc, sc);
+      ctx.translate(-L / 2, 0);
+      drawGunSprite(ctx, w, col, w.tier >= 5);
+      ctx.restore();
+      ctx.font = '800 8.5px "Segoe UI", system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = near ? '#ffffff' : col;
+      ctx.fillText(w.name, 0, st.r + 6);
+      ctx.font = '700 7.5px "Segoe UI", system-ui, sans-serif';
+      ctx.fillStyle = 'rgba(160,196,210,0.65)';
+      ctx.fillText('T' + w.tier, 0, st.r + 17);
+    } else if (isGadget) {
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(0, 1, 6.5, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#081016';
+      ctx.fillRect(-3, -8.5, 6, 3.5);
+      ctx.font = '800 8.5px "Segoe UI", system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = near ? '#ffffff' : col;
+      ctx.fillText(g.name, 0, st.r + 6);
+    } else {
+      // Skin Forge pedestal
+      const sk = skinInfo(player ? player.skin : 'factory');
+      ctx.fillStyle = sk.color;
+      ctx.beginPath();
+      ctx.moveTo(0, -10); ctx.lineTo(9, 0); ctx.lineTo(0, 10); ctx.lineTo(-9, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.font = '800 8.5px "Segoe UI", system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = near ? '#ffffff' : sk.color;
+      ctx.fillText('SKIN: ' + sk.name, 0, st.r + 6);
+    }
+    ctx.restore();
+  }
+
+  // Glowing Combat Teleport Portal
+  const pt = SAFE_ZONE_PORTAL;
+  ctx.save();
+  ctx.translate(pt.x, pt.y);
+  const grad = ctx.createRadialGradient(0, 0, 6, 0, 0, pt.r + 14);
+  grad.addColorStop(0, 'rgba(94,231,255,0.45)');
+  grad.addColorStop(0.6, 'rgba(255,179,71,0.18)');
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = grad;
+  ctx.beginPath(); ctx.arc(0, 0, pt.r + 14, 0, TAU); ctx.fill();
+
+  ctx.strokeStyle = '#ffd166';
+  ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(0, 0, pt.r, 0, TAU); ctx.stroke();
+  ctx.save();
+  ctx.rotate(t * 1.4);
+  ctx.setLineDash([12, 10]);
+  ctx.strokeStyle = '#5ee7ff';
+  ctx.lineWidth = 2.4;
+  ctx.beginPath(); ctx.arc(0, 0, pt.r - 9, 0, TAU); ctx.stroke();
+  ctx.restore();
+  ctx.save();
+  ctx.rotate(-t * 2.1);
+  ctx.setLineDash([6, 8]);
+  ctx.strokeStyle = '#ffe5a3';
+  ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.arc(0, 0, pt.r - 19, 0, TAU); ctx.stroke();
+  ctx.restore();
+
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = '900 10px "Segoe UI", system-ui, sans-serif';
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText('COMBAT TP', 0, -4);
+  ctx.font = '800 8px "Segoe UI", system-ui, sans-serif';
+  ctx.fillStyle = '#ffd166';
+  ctx.fillText('WALK IN · [T]', 0, 9);
+  ctx.restore();
+
+  // Holographic Firing-Range Target Dummies
+  for (let i = 0; i < safeZoneDummies.length; i++) {
+    const dm = safeZoneDummies[i];
+    ctx.save();
+    ctx.translate(dm.x + (dm.flinchX || 0), dm.y + (dm.flinchY || 0));
+    if (!dm.alive) {
+      const prog = 1 - clamp(dm.respawnT / 0.9, 0, 1);
+      ctx.strokeStyle = 'rgba(94,231,255,0.45)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, dm.r, -Math.PI / 2, -Math.PI / 2 + TAU * prog);
+      ctx.stroke();
+      ctx.restore();
+      continue;
+    }
+    ctx.fillStyle = 'rgba(0,0,0,0.42)';
+    ctx.beginPath(); ctx.ellipse(2, 9, dm.r, dm.r * 0.55, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = dm.hitFlash > 0 ? '#ffffff' : (dm.maxArmor > 0 ? '#1b475c' : '#4a252a');
+    ctx.beginPath(); ctx.arc(0, 0, dm.r, 0, TAU); ctx.fill();
+    ctx.strokeStyle = dm.maxArmor > 0 ? '#67d9ff' : '#ff7a59';
+    ctx.lineWidth = 2.4;
+    ctx.stroke();
+    // Bullseye target rings
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.arc(0, 0, dm.r * 0.55, 0, TAU); ctx.stroke();
+    ctx.fillStyle = '#ffd166';
+    ctx.beginPath(); ctx.arc(0, 0, 3.5, 0, TAU); ctx.fill();
+    // HP & Armor bars
+    const bw = 50;
+    const by = -dm.r - 16;
+    ctx.fillStyle = 'rgba(2,6,10,0.85)';
+    ctx.fillRect(-bw / 2, by, bw, 4.5);
+    const tr = clamp((dm.hpTrail != null ? dm.hpTrail : dm.hp) / dm.maxHp, 0, 1);
+    if (tr > dm.hp / dm.maxHp) {
+      ctx.fillStyle = 'rgba(255,235,215,0.75)';
+      ctx.fillRect(-bw / 2, by, bw * tr, 4.5);
+    }
+    ctx.fillStyle = '#ff6b57';
+    ctx.fillRect(-bw / 2, by, bw * clamp(dm.hp / dm.maxHp, 0, 1), 4.5);
+    if (dm.armor > 0 && dm.maxArmor > 0) {
+      ctx.fillStyle = '#67d9ff';
+      ctx.fillRect(-bw / 2, by - 3.5, bw * clamp(dm.armor / dm.maxArmor, 0, 1), 2.5);
+    }
+    ctx.font = '700 8.5px "Segoe UI", system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillStyle = 'rgba(225,245,255,0.85)';
+    ctx.fillText(dm.name, 0, by - (dm.armor > 0 ? 5.5 : 3));
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+function initSafeZonePanelUI() {
+  if (UI.safeZoneWeapons) {
+    let html = '';
+    for (const key in WEAPONS) {
+      const w = WEAPONS[key];
+      html += `<button type="button" class="szBtn" data-sz-weapon="${key}" style="--wc:${w.color}">` +
+        `<b>${w.name}</b><small>T${w.tier}</small></button>`;
+    }
+    UI.safeZoneWeapons.innerHTML = html;
+    UI.safeZoneWeapons.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-sz-weapon]');
+      if (!btn || typeof selectSafeZoneWeapon !== 'function') return;
+      selectSafeZoneWeapon(btn.dataset.szWeapon);
+    });
+  }
+  if (UI.safeZoneSkins) {
+    let html = '';
+    for (const key in SKINS) {
+      const sk = SKINS[key];
+      html += `<button type="button" class="szChip" data-sz-skin="${key}" style="--sc:${sk.color}">` +
+        `${sk.name}${sk.bonus > 0 ? ' +' + Math.round(sk.bonus * 100) + '%' : ''}</button>`;
+    }
+    UI.safeZoneSkins.innerHTML = html;
+    UI.safeZoneSkins.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-sz-skin]');
+      if (!btn || typeof selectSafeZoneSkin !== 'function') return;
+      selectSafeZoneSkin(btn.dataset.szSkin);
+    });
+  }
+  if (UI.safeZoneGadgets) {
+    let html = '';
+    for (const key in GADGETS) {
+      const g = GADGETS[key];
+      html += `<button type="button" class="szChip" data-sz-gadget="${key}" style="--sc:${g.color}">${g.name}</button>`;
+    }
+    UI.safeZoneGadgets.innerHTML = html;
+    UI.safeZoneGadgets.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-sz-gadget]');
+      if (!btn || typeof selectSafeZoneGadget !== 'function') return;
+      selectSafeZoneGadget(btn.dataset.szGadget);
+    });
+  }
+}
+
+function syncSafeZonePanelUI() {
+  const practice = isPracticeMode() && game.state === 'playing' && player && player.alive;
+  const inSafe = !!(practice && player.inSafeZone);
+  if (UI.safeZonePanel) UI.safeZonePanel.classList.toggle('hidden', !inSafe);
+  if (UI.practiceBar) UI.practiceBar.classList.toggle('hidden', !(practice && !inSafe));
+  if (UI.safeTouch) {
+    UI.safeTouch.classList.toggle('hidden', !practice);
+    if (practice) UI.safeTouch.textContent = inSafe ? 'TP' : 'SAFE';
+  }
+  if (!inSafe || !player) return;
+  if (UI.safeZoneWeapons) {
+    for (const btn of UI.safeZoneWeapons.querySelectorAll('[data-sz-weapon]')) {
+      btn.classList.toggle('active', btn.dataset.szWeapon === player.weapon);
+    }
+  }
+  if (UI.safeZoneSkins) {
+    for (const btn of UI.safeZoneSkins.querySelectorAll('[data-sz-skin]')) {
+      btn.classList.toggle('active', btn.dataset.szSkin === player.skin);
+    }
+  }
+  if (UI.safeZoneGadgets) {
+    for (const btn of UI.safeZoneGadgets.querySelectorAll('[data-sz-gadget]')) {
+      btn.classList.toggle('active', btn.dataset.szGadget === player.gadget);
+    }
+  }
+}
+
+/* ---------------------------------------------------------
    Main Render Pipeline
    --------------------------------------------------------- */
 function render() {
@@ -2623,6 +2934,7 @@ function render() {
   ctx.translate(-cam.x, -cam.y);
 
   drawGround();
+  drawSafeZone();
   drawDecals();
   drawBoostPads();
   drawPickups();
@@ -2702,7 +3014,10 @@ function updateHUD() {
 
   let buff = 'COMBAT READY';
   let buffTone = '';
-  if (player.jamT > 0) {
+  if (player.inSafeZone) {
+    buff = 'SAFE ZONE · INVULNERABLE';
+    buffTone = 'cyan';
+  } else if (player.jamT > 0) {
     buff = 'EMP JAMMED';
     buffTone = 'purple';
   } else if (game.invuln > 0) {
@@ -2833,14 +3148,39 @@ function updateHUD() {
     if (UI.gadgetTouch) UI.gadgetTouch.textContent = g.short + ' ' + (player.gadgetCharges || 0);
   }
 
-  // World Pickup Swap Prompt [E]
-  const np = game.nearPickup;
-  const pKey = np ? (np.kind + '|' + (np.weapon || np.gadget) + '|' + (np.skin || '') + '|' + player.weapon + '|' + player.skin) : '';
+  // World Pickup / Safe Zone Pedestal Prompt [E]
+  const nsSt = player.inSafeZone ? game.nearStation : null;
+  const np = nsSt ? null : game.nearPickup;
+  const pKey = nsSt
+    ? ('sz|' + nsSt.kind + '|' + (nsSt.weapon || nsSt.gadget || player.skin) + '|' + player.weapon)
+    : np ? (np.kind + '|' + (np.weapon || np.gadget) + '|' + (np.skin || '') + '|' + player.weapon + '|' + player.skin) : '';
   if (pKey !== hudCache.pickupKey && UI.pickupPrompt) {
     hudCache.pickupKey = pKey;
-    UI.pickupPrompt.classList.toggle('hidden', !np);
-    if (UI.interactTouch) UI.interactTouch.classList.toggle('hidden', !np);
-    if (np) {
+    const showPrompt = !!(nsSt || np);
+    UI.pickupPrompt.classList.toggle('hidden', !showPrompt);
+    if (UI.interactTouch) UI.interactTouch.classList.toggle('hidden', !showPrompt);
+    if (nsSt) {
+      UI.pickupPrompt.classList.add('upgrade');
+      if (nsSt.kind === 'weapon') {
+        const nw = WEAPONS[nsSt.weapon];
+        UI.pickupTitle.textContent = 'EQUIP ' + nw.name;
+        UI.pickupTitle.style.color = nw.color;
+        UI.pickupSub.textContent = nw.explosive
+          ? `TIER ${nw.tier} · BLAST ${nw.splashDmg} (${nw.splashDmg + nw.dmg} HIT) · MAG ${nw.mag}`
+          : nw.spinUp ? `TIER ${nw.tier} · ${nw.rpm} RPM · MAG ${nw.mag}`
+          : `TIER ${nw.tier} · DMG ${Math.round(nw.dmg * nw.pellets)} · MAG ${nw.mag}`;
+      } else if (nsSt.kind === 'gadget') {
+        const g = GADGETS[nsSt.gadget];
+        UI.pickupTitle.textContent = 'EQUIP ' + g.name + ' (×' + g.maxCharges + ')';
+        UI.pickupTitle.style.color = g.color;
+        UI.pickupSub.textContent = 'SAFE ZONE GADGET RACK';
+      } else {
+        const sk = skinInfo(player.skin);
+        UI.pickupTitle.textContent = 'CYCLE SKIN · ' + sk.name;
+        UI.pickupTitle.style.color = sk.color;
+        UI.pickupSub.textContent = 'FACTORY / NEON / GOLD / INFERNO / VOID';
+      }
+    } else if (np) {
       if (np.kind === 'weapon') {
         const nw = WEAPONS[np.weapon];
         const ns = skinInfo(np.skin);
@@ -2952,6 +3292,16 @@ function updateHUD() {
     if (closing !== hudCache.zoneClosing) {
       hudCache.zoneClosing = closing;
       UI.zone.parentElement.classList.toggle('closing', closing);
+    }
+  } else if (isPracticeMode()) {
+    const label = player.inSafeZone ? 'SAFE ZONE · ARMORY' : 'PRACTICE · NO STORM';
+    if (label !== hudCache.zone) {
+      hudCache.zone = label;
+      UI.zone.textContent = label;
+    }
+    if (hudCache.zoneClosing !== false) {
+      hudCache.zoneClosing = false;
+      UI.zone.parentElement.classList.remove('closing');
     }
   }
 
@@ -3115,12 +3465,21 @@ function drawMinimap() {
   mctx.clearRect(0, 0, minimap.width, minimap.height);
   mctx.drawImage(minimapStatic, 0, 0);
   mctx.setTransform(mmDpr, 0, 0, mmDpr, 0, 0);
-  if (!zone) return;
+  if (!zone && !isPracticeMode()) return;
 
   const pad = 5;
   const k = (S - pad * 2) / WORLD;
   const mapX = (x) => pad + x * k;
   const mapY = (y) => pad + y * k;
+
+  // Practice Safe Zone marker on radar
+  if (isPracticeMode()) {
+    mctx.fillStyle = 'rgba(94,231,255,0.16)';
+    mctx.fillRect(mapX(SAFE_ZONE.x), mapY(SAFE_ZONE.y), SAFE_ZONE.w * k, SAFE_ZONE.h * k);
+    mctx.strokeStyle = 'rgba(94,231,255,0.85)';
+    mctx.lineWidth = 1.2;
+    mctx.strokeRect(mapX(SAFE_ZONE.x), mapY(SAFE_ZONE.y), SAFE_ZONE.w * k, SAFE_ZONE.h * k);
+  }
 
   // Live intact destructible crates on radar (vanish cleanly when shattered)
   mctx.fillStyle = 'rgba(196,154,96,0.22)';
@@ -3130,47 +3489,51 @@ function drawMinimap() {
     mctx.fillRect(mapX(o.x), mapY(o.y), Math.max(1, o.w * k), Math.max(1, o.h * k));
   }
 
-  mctx.save();
-  mctx.beginPath();
-  mctx.rect(0, 0, S, S);
-  mctx.arc(mapX(zone.x), mapY(zone.y), Math.max(0.5, zone.r * k), 0, TAU, true);
-  mctx.fillStyle = 'rgba(140,70,255,0.22)';
-  mctx.fill('evenodd');
-  mctx.restore();
-
-  mctx.strokeStyle = 'rgba(190,130,255,0.9)';
-  mctx.lineWidth = 1.3;
-  mctx.beginPath();
-  mctx.arc(mapX(zone.x), mapY(zone.y), Math.max(0.5, zone.r * k), 0, TAU);
-  mctx.stroke();
-
-  if (zone.state === 'waiting' && zone.nextR > 0) {
-    const pulse = 0.5 + 0.5 * Math.sin(game.time * 2.4);
+  if (zone) {
     mctx.save();
-    mctx.setLineDash([3, 4]);
-    mctx.strokeStyle = `rgba(232,218,255,${(0.28 + pulse * 0.28).toFixed(2)})`;
-    mctx.lineWidth = 1;
     mctx.beginPath();
-    mctx.arc(mapX(zone.nextX), mapY(zone.nextY), Math.max(0.5, zone.nextR * k), 0, TAU);
-    mctx.stroke();
+    mctx.rect(0, 0, S, S);
+    mctx.arc(mapX(zone.x), mapY(zone.y), Math.max(0.5, zone.r * k), 0, TAU, true);
+    mctx.fillStyle = 'rgba(140,70,255,0.22)';
+    mctx.fill('evenodd');
     mctx.restore();
+
+    mctx.strokeStyle = 'rgba(190,130,255,0.9)';
+    mctx.lineWidth = 1.3;
+    mctx.beginPath();
+    mctx.arc(mapX(zone.x), mapY(zone.y), Math.max(0.5, zone.r * k), 0, TAU);
+    mctx.stroke();
+
+    if (zone.state === 'waiting' && zone.nextR > 0) {
+      const pulse = 0.5 + 0.5 * Math.sin(game.time * 2.4);
+      mctx.save();
+      mctx.setLineDash([3, 4]);
+      mctx.strokeStyle = `rgba(232,218,255,${(0.28 + pulse * 0.28).toFixed(2)})`;
+      mctx.lineWidth = 1;
+      mctx.beginPath();
+      mctx.arc(mapX(zone.nextX), mapY(zone.nextY), Math.max(0.5, zone.nextR * k), 0, TAU);
+      mctx.stroke();
+      mctx.restore();
+    }
   }
 
   if (player) {
-    const radar = player.radarRange || 1300;
-    const zdx = zone.x - player.x;
-    const zdy = zone.y - player.y;
-    if (zdx * zdx + zdy * zdy > zone.r * zone.r) {
-      const zd = Math.hypot(zdx, zdy) || 1;
-      mctx.save();
-      mctx.setLineDash([2, 4]);
-      mctx.strokeStyle = 'rgba(230,198,255,0.6)';
-      mctx.lineWidth = 1;
-      mctx.beginPath();
-      mctx.moveTo(mapX(player.x), mapY(player.y));
-      mctx.lineTo(mapX(zone.x - (zdx / zd) * zone.r), mapY(zone.y - (zdy / zd) * zone.r));
-      mctx.stroke();
-      mctx.restore();
+    const radar = player.radarRange || 1550;
+    if (zone) {
+      const zdx = zone.x - player.x;
+      const zdy = zone.y - player.y;
+      if (zdx * zdx + zdy * zdy > zone.r * zone.r) {
+        const zd = Math.hypot(zdx, zdy) || 1;
+        mctx.save();
+        mctx.setLineDash([2, 4]);
+        mctx.strokeStyle = 'rgba(230,198,255,0.6)';
+        mctx.lineWidth = 1;
+        mctx.beginPath();
+        mctx.moveTo(mapX(player.x), mapY(player.y));
+        mctx.lineTo(mapX(zone.x - (zdx / zd) * zone.r), mapY(zone.y - (zdy / zd) * zone.r));
+        mctx.stroke();
+        mctx.restore();
+      }
     }
 
     for (const p of pickups) {

@@ -15,13 +15,14 @@ Open `index.html` in any modern desktop or mobile browser.
 | Left mouse | Fire |
 | Right mouse / `G` | Throw tactical gadget (Frag / EMP / Smoke) |
 | `1` / `2` / `Q` / Mouse wheel | Switch weapon slots |
-| `E` | Swap nearby weapon or gadget |
+| `E` | Swap nearby weapon or gadget / interact with Safe Zone pedestals |
 | `R` | Reload |
 | `Space` | Dash (brief i-frames) |
+| `H` / `T` | Practice mode: Return to Safe Zone (`H`) / Teleport to Combat (`T`) |
 | `Esc` | Pause |
 | `M` | Mute / unmute |
 | `Enter` | Start or redeploy |
-| Touch screen | Dual-stick Move + Aim/Fire, Swap, Gadget, Interact (`E`), Reload, Dash, Pause |
+| Touch screen | Dual-stick Move + Aim/Fire, Swap, Gadget, Interact (`E`), Reload, Dash, Safe Zone (`SAFE`/`TP`), Pause |
 
 ## Major Gameplay Systems
 
@@ -36,7 +37,9 @@ Open `index.html` in any modern desktop or mobile browser.
   - **Explosive Fuel Barrels**: Shoot barrels to detonate fiery chain reactions across compounds.
   - **Kinetic Boost Pads**: Step onto glowing directional pads for high-speed tactical launches.
 - **Match Modes & Tactical Kits**:
-  - Modes: **Royale** (20 operators), **Blitz** (16 operators, fast storm, rarer skins, 1.15× AURA), and **Elite Ops** (45% Elites, deadlier AI, 1.6× AURA).
+  - Modes:
+    - **Royale**: 30 operators (`1` player + `29` bots) on the expanded `4400×4400` 8-district map with extended 9-phase storm (~5 min) and supply caches.
+    - **Practice**: Open-world training arena with a protected **Safe Zone** (free selection of all 12 weapons, all 5 finishes, all 3 gadgets, firing-range target dummies, and glowing **COMBAT TP** portal). Teleport into the combat arena with **no shrinking storm**, floor weapons spawned around the map, 19 bots wielding random weapons that continuously respawn upon death (always **20** active operators), instant random combat respawn on player death, and a one-click **`SAFE ZONE [H]`** return button.
   - Free Tactical Kits: **Vanguard** (+30 starting Armor & 90 max), **Striker** (-22% reload, -25% dash CD, +8% crit), **Scout** (+10% speed & +35% radar range), **Medic** (faster regen to 85% HP & +55 HP medkits + speed boost).
 - **Critical Hits & Combat Feel**: Center-line precision shots trigger `1.42×` **CRIT** hits with golden spark bursts, diamond hitmarkers, and crisp chimes.
 - **Upgraded Tactical Bot AI**: Bots actively seek nearby upgrades/medkits/armor/supply drops, evade live grenades, respect smoke clouds, and elites can flush targets behind cover with gadgets.
@@ -49,7 +52,7 @@ Engineered to stay smooth on weak laptops/phones while scaling up for high-end P
 - **Zero-Hitch Adaptive Scaling**: Tracks both FPS and EMA frame time (`ms`). When **Auto-Adapt** is enabled, sustained frame drops smoothly step down resolution scale, particle caps, decals, dynamic lighting, and CSS blur *without rebuilding the baked ground layer mid-match* (zero stutter).
 - **Optional Live FPS HUD**: Toggle the compact top-left telemetry badge (`FPS · Quality · Resolution %`).
 - **O(1) Spatial Hash Grid**: Obstacles are indexed in a 16×16 spatial grid, replacing brute-force bullet/collision/LOS/AI cover scans.
-- **Viewport-Clipped Ground Blit**: Static terrain, grit noise texture, roads, 6 distinct biome floors, and 2.5D indestructible rocks/containers are baked once per match and only the visible viewport slice is blitted each frame.
+- **Viewport-Clipped Ground Blit**: Static terrain, grit noise texture, 3 arterial highways, 8 distinct biome floors (`4400×4400`), and 2.5D indestructible rocks/containers are baked once per match and only the visible viewport slice is blitted each frame.
 - **Dynamic Visual Upgrades**:
   - 2.5D extruded cover with directional cast shadows and specular highlights.
   - Pure celestial planet operators (Mercury, Mars, Earth, Venus, Neptune, Jupiter, Uranus, Saturn) with distinct planetary surfaces, rings, craters, cloud bands, and signature aura — no facial features.
@@ -57,6 +60,17 @@ Engineered to stay smooth on weak laptops/phones while scaling up for high-end P
   - Delayed damage-drain HP bar and off-screen supply/grenade edge indicators.
 
 ## Releases
+
+### v0.1.3
+- **Expanded Map & Longer Matches**:
+  - Expanded arena from `3200×3200` to `4400×4400` (+89% playable area) with 8 named districts (`ARENA CORE`, `FOUNDRY`, `RELAY`, `DOCKS`, `SECTOR 9`, `SPIRE`, `OUTPOST`, `REACTOR`), 3 intersecting highways, 20 fortified compounds, 42 explosive barrels, 10 kinetic boost pads, and 74+ floor weapons (plus 3 guaranteed Tier 5 apex spawns).
+  - **Royale Mode Upgraded to 30 Operators**: Increased lobby count from `20` → `30` (`1` player + `29` bots) with an extended 9-phase storm (~5 minutes) and rebalanced bot-vs-bot pacing.
+- **Streamlined Modes & New Practice Mode (`PRACTICE`)**:
+  - Removed the 2 redundant modes (`Blitz` and `Elite Ops`) and replaced them with **Practice** mode.
+  - **Protected Safe Zone Sanctuary**: Free access to all 12 weapons, all 5 weapon finishes, and all 3 tactical gadgets via physical pedestals (`[E]`) or the quick-armory dock, plus 2 live regenerating firing-range target dummies (`DUMMY 100HP` & `ARMORED 175`).
+  - **Seamless Combat Teleport (`COMBAT TP` / `T`)**: Step onto the glowing portal pad, click `TELEPORT TO COMBAT`, or press `T` to drop into the live combat arena with **no shrinking storm**.
+  - **Continuous 20-Operator Action**: Always maintains `20` active operators (`1` player + `19` bots). Floor weapons spawn and auto-replenish around the map; bots spawn with random weapons across all 12 tiers and respawn immediately on death; players respawn immediately at a random combat location on death.
+  - **Return to Safe Zone (`H` / HUD / Mobile / Pause)**: Dedicated `SAFE ZONE [H]` button in the top-left HUD, mobile touch button, pause menu option, and `H` hotkey let players return to the Safe Zone anytime to switch loadouts.
 
 ### v0.1.2
 - **New Tier 5 Heavy Weapons**:

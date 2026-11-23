@@ -6,9 +6,11 @@
    ========================================================= */
 
 const TAU = Math.PI * 2;
-const WORLD = 3200;
-let TOTAL_PLAYERS = 20;
+const WORLD = 4400;
+let TOTAL_PLAYERS = 30;
 let BOT_TOTAL = TOTAL_PLAYERS - 1;
+const SAFE_ZONE = { x: 140, y: 140, w: 980, h: 680 };
+const SAFE_ZONE_PORTAL = { x: SAFE_ZONE.x + 650, y: SAFE_ZONE.y + 555, r: 44 };
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -146,22 +148,18 @@ const GADGETS = {
 
 const GAME_MODES = {
   classic: {
-    id: 'classic', players: 20, stormSpeed: 1.0, lootLuck: 0.0,
-    eliteChance: 0.2, supplyFirst: 42, supplyGap: 58, auraMul: 1.0,
+    id: 'classic', players: 30, stormSpeed: 1.0, lootLuck: 0.25,
+    eliteChance: 0.22, supplyFirst: 52, supplyGap: 68, auraMul: 1.0,
+    noStorm: false, practice: false,
     name: 'ROYALE',
-    desc: '20 operators · Classic storm & supply caches',
+    desc: '30 operators · 4400m expanded map, extended storm & supply caches',
   },
-  blitz: {
-    id: 'blitz', players: 16, stormSpeed: 1.48, lootLuck: 1.6,
-    eliteChance: 0.26, supplyFirst: 26, supplyGap: 42, auraMul: 1.15,
-    name: 'BLITZ',
-    desc: '16 operators · Fast storm, rarer skins, 1.15× AURA',
-  },
-  hardcore: {
-    id: 'hardcore', players: 20, stormSpeed: 1.15, lootLuck: 1.0,
-    eliteChance: 0.45, supplyFirst: 36, supplyGap: 52, auraMul: 1.6,
-    name: 'ELITE OPS',
-    desc: 'Deadlier AI & 45% Elites · High risk, 1.6× AURA',
+  practice: {
+    id: 'practice', players: 20, stormSpeed: 0, lootLuck: 0.9,
+    eliteChance: 0.25, supplyFirst: 45, supplyGap: 65, auraMul: 0.25,
+    noStorm: true, practice: true,
+    name: 'PRACTICE',
+    desc: '20 ops always · Free Safe Zone armory, no storm & instant respawn',
   },
 };
 
@@ -207,6 +205,16 @@ function saveUserPrefs() {
 
 function getGameMode() {
   return GAME_MODES[userPrefs.mode] || GAME_MODES.classic;
+}
+
+function isPracticeMode() {
+  return !!getGameMode().practice;
+}
+
+function inSafeZoneRect(x, y, pad = 0) {
+  return isPracticeMode() &&
+    x >= SAFE_ZONE.x - pad && x <= SAFE_ZONE.x + SAFE_ZONE.w + pad &&
+    y >= SAFE_ZONE.y - pad && y <= SAFE_ZONE.y + SAFE_ZONE.h + pad;
 }
 
 function getPlayerPerk() {
@@ -277,15 +285,15 @@ function randomSkin(luck = 0) {
 }
 
 const ZONE_PHASES = [
-  { wait: 18, shrink: 13, r: 1400, dps: 2 },
-  { wait: 14, shrink: 12, r: 980, dps: 4 },
-  { wait: 12, shrink: 10, r: 680, dps: 6 },
-  { wait: 10, shrink: 9, r: 450, dps: 9 },
-  { wait: 9, shrink: 8, r: 280, dps: 13 },
-  { wait: 8, shrink: 7, r: 160, dps: 18 },
-  { wait: 6, shrink: 6, r: 80, dps: 25 },
-  { wait: 6, shrink: 5, r: 34, dps: 40 },
-  { wait: 5, shrink: 10, r: 0, dps: 60 },
+  { wait: 30, shrink: 22, r: 2050, dps: 2 },
+  { wait: 26, shrink: 20, r: 1500, dps: 3 },
+  { wait: 24, shrink: 18, r: 1080, dps: 5 },
+  { wait: 22, shrink: 16, r: 740, dps: 8 },
+  { wait: 18, shrink: 14, r: 480, dps: 12 },
+  { wait: 15, shrink: 12, r: 290, dps: 17 },
+  { wait: 12, shrink: 10, r: 160, dps: 24 },
+  { wait: 10, shrink: 8, r: 75, dps: 35 },
+  { wait: 8, shrink: 12, r: 0, dps: 55 },
 ];
 
 const BOT_NAMES = [
@@ -297,17 +305,20 @@ const BOT_NAMES = [
 ];
 
 const ROADS = [
-  { x: WORLD * 0.2 - 110, y: 0, w: 220, h: WORLD },
-  { x: 0, y: WORLD * 0.72 - 95, w: WORLD, h: 190 },
+  { x: 1180, y: 0, w: 200, h: WORLD },
+  { x: 0, y: 2920, w: WORLD, h: 190 },
+  { x: 3340, y: 0, w: 200, h: WORLD },
 ];
 
 const DISTRICTS = [
-  { x: WORLD * 0.50, y: WORLD * 0.50, name: 'ARENA CORE', sub: 'SECTOR 00', color: '94,231,255', style: 'core' },
-  { x: WORLD * 0.17, y: WORLD * 0.26, name: 'FOUNDRY', sub: 'INDUSTRIAL', color: '255,159,69', style: 'foundry' },
-  { x: WORLD * 0.83, y: WORLD * 0.24, name: 'RELAY', sub: 'COMMS ARRAY', color: '176,108,255', style: 'relay' },
-  { x: WORLD * 0.18, y: WORLD * 0.80, name: 'DOCKS', sub: 'CARGO BAY', color: '94,231,255', style: 'docks' },
-  { x: WORLD * 0.82, y: WORLD * 0.81, name: 'SECTOR 9', sub: 'CONTAINMENT', color: '255,90,95', style: 'sector9' },
-  { x: WORLD * 0.53, y: WORLD * 0.15, name: 'SPIRE', sub: 'OVERWATCH', color: '255,209,102', style: 'spire' },
+  { x: WORLD * 0.52, y: WORLD * 0.50, name: 'ARENA CORE', sub: 'SECTOR 00', color: '94,231,255', style: 'core' },
+  { x: WORLD * 0.15, y: WORLD * 0.36, name: 'FOUNDRY', sub: 'INDUSTRIAL', color: '255,159,69', style: 'foundry' },
+  { x: WORLD * 0.85, y: WORLD * 0.18, name: 'RELAY', sub: 'COMMS ARRAY', color: '176,108,255', style: 'relay' },
+  { x: WORLD * 0.15, y: WORLD * 0.81, name: 'DOCKS', sub: 'CARGO BAY', color: '94,231,255', style: 'docks' },
+  { x: WORLD * 0.85, y: WORLD * 0.82, name: 'SECTOR 9', sub: 'CONTAINMENT', color: '255,90,95', style: 'sector9' },
+  { x: WORLD * 0.52, y: WORLD * 0.14, name: 'SPIRE', sub: 'OVERWATCH', color: '255,209,102', style: 'spire' },
+  { x: WORLD * 0.86, y: WORLD * 0.50, name: 'OUTPOST', sub: 'EAST RIDGE', color: '123,245,193', style: 'foundry' },
+  { x: WORLD * 0.52, y: WORLD * 0.85, name: 'REACTOR', sub: 'POWER CORE', color: '255,107,53', style: 'sector9' },
 ];
 
 const REDUCED_MOTION = typeof window.matchMedia === 'function'
@@ -368,6 +379,16 @@ const UI = {
   gadgetTouch: document.getElementById('gadgetTouch'),
   swapTouch: document.getElementById('swapTouch'),
   interactTouch: document.getElementById('interactTouch'),
+  safeTouch: document.getElementById('safeTouch'),
+  practiceBar: document.getElementById('practiceBar'),
+  returnSafeBtn: document.getElementById('returnSafeBtn'),
+  safeZonePanel: document.getElementById('safeZonePanel'),
+  safeZoneWeapons: document.getElementById('safeZoneWeapons'),
+  safeZoneSkins: document.getElementById('safeZoneSkins'),
+  safeZoneGadgets: document.getElementById('safeZoneGadgets'),
+  deployArenaBtn: document.getElementById('deployArenaBtn'),
+  pauseSafeBtn: document.getElementById('pauseSafeBtn'),
+  pauseHint: document.getElementById('pauseHint'),
   warnArrow: document.getElementById('warnArrow'),
   warnDist: document.getElementById('warnDist'),
   vignette: document.getElementById('vignette'),
@@ -638,6 +659,8 @@ let beams = [];
 let texts = [];
 let pings = [];
 let zone = null;
+let safeZoneStations = [];
+let safeZoneDummies = [];
 
 /* ---------------------------------------------------------
    Spatial Hash Grid for O(1) obstacle queries & LOS
@@ -755,6 +778,13 @@ function segRect(x1, y1, x2, y2, rect, pad = 0) {
 }
 
 function hasLOS(x1, y1, x2, y2) {
+  // Safe Zone shield barrier blocks sightlines between sanctuary and combat arena.
+  if (isPracticeMode()) {
+    const in1 = inSafeZoneRect(x1, y1, 0);
+    const in2 = inSafeZoneRect(x2, y2, 0);
+    if (in1 !== in2) return false;
+    if (!in1 && segRect(x1, y1, x2, y2, SAFE_ZONE, 2)) return false;
+  }
   // Fast grid-accelerated ray walk using bounding cells along the segment.
   const dx = x2 - x1;
   const dy = y2 - y1;
@@ -1518,6 +1548,7 @@ window.addEventListener('mouseup', (e) => {
 
 window.addEventListener('wheel', (e) => {
   if (game.state !== 'playing' || !player || !player.alive) return;
+  if (e.target && e.target.closest && e.target.closest('#safeZonePanel')) return;
   if (Math.abs(e.deltaY) < 4) return;
   const now = performance.now();
   if (now - lastWheelSwap < 140) return;
@@ -1558,6 +1589,12 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'Digit2' && typeof switchWeapon === 'function') switchWeapon(1);
   if (e.code === 'KeyE' && typeof interactPickup === 'function') interactPickup();
   if (e.code === 'KeyG' && typeof tryUseGadget === 'function') tryUseGadget();
+  if (e.code === 'KeyH' && isPracticeMode() && !player.inSafeZone && typeof returnToSafeZone === 'function') {
+    returnToSafeZone();
+  }
+  if (e.code === 'KeyT' && isPracticeMode() && player.inSafeZone && typeof teleportToCombat === 'function') {
+    teleportToCombat();
+  }
 });
 
 window.addEventListener('keyup', (e) => { keys[e.code] = false; });
@@ -1738,6 +1775,15 @@ function bindTouchControls() {
   if (swap) swap.addEventListener('pointerdown', (e) => { e.preventDefault(); if (typeof switchWeapon === 'function' && player) switchWeapon(player.activeSlot === 0 ? 1 : 0); });
   if (interact) interact.addEventListener('pointerdown', (e) => { e.preventDefault(); if (typeof interactPickup === 'function') interactPickup(); });
   if (pause) pause.addEventListener('pointerdown', (e) => { e.preventDefault(); if (typeof togglePause === 'function') togglePause(); });
+  const safeTouch = document.getElementById('safeTouch');
+  if (safeTouch) {
+    safeTouch.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      if (!isPracticeMode() || !player || !player.alive) return;
+      if (player.inSafeZone && typeof teleportToCombat === 'function') teleportToCombat();
+      else if (!player.inSafeZone && typeof returnToSafeZone === 'function') returnToSafeZone();
+    });
+  }
 }
 
 bindTouchControls();
@@ -1757,10 +1803,11 @@ function rectsOverlap(a, b, pad = 0) {
 
 function generateObstacles() {
   const list = [];
+  const practice = isPracticeMode();
   const add = (x, y, w, h, type) => {
     if (x < 96 || y < 96 || x + w > WORLD - 96 || y + h > WORLD - 96) return false;
     // Keep the exact center drop ring slightly open for dynamic fights.
-    if (Math.hypot(x + w / 2 - WORLD / 2, y + h / 2 - WORLD / 2) < 95) return false;
+    if (Math.hypot(x + w / 2 - WORLD / 2, y + h / 2 - WORLD / 2) < 105) return false;
     const rect = {
       x, y, w, h, type, seed: Math.random() * 100,
       destructible: type === 'crate',
@@ -1770,6 +1817,7 @@ function generateObstacles() {
       destroyed: false,
       _q: 0,
     };
+    if (practice && rectsOverlap(rect, SAFE_ZONE, 120)) return false;
     if (list.some((o) => rectsOverlap(rect, o, 36))) return false;
     list.push(rect);
     return true;
@@ -1780,10 +1828,10 @@ function generateObstacles() {
     const count = d.style === 'core' ? 4 : 3;
     for (let i = 0; i < count; i++) {
       const a = (i / count) * TAU + rand(-0.35, 0.35);
-      const dist = d.style === 'core' ? 255 : rand(155, 240);
+      const dist = d.style === 'core' ? 265 : rand(165, 255);
       const isHoriz = Math.random() < 0.5;
-      const w = isHoriz ? rand(96, 148) : rand(56, 76);
-      const h = isHoriz ? rand(56, 76) : rand(96, 148);
+      const w = isHoriz ? rand(96, 152) : rand(56, 78);
+      const h = isHoriz ? rand(56, 78) : rand(96, 152);
       const type = d.style === 'docks' ? 'container'
         : d.style === 'foundry' ? pick(['container', 'crate'])
         : pick(['container', 'rock', 'crate']);
@@ -1791,24 +1839,24 @@ function generateObstacles() {
     }
   }
 
-  // Compound clusters across the arena.
-  for (let c = 0; c < 13; c++) {
-    const cx = rand(320, WORLD - 320);
-    const cy = rand(320, WORLD - 320);
+  // Compound clusters across the expanded 4400x4400 arena.
+  for (let c = 0; c < 20; c++) {
+    const cx = rand(340, WORLD - 340);
+    const cy = rand(340, WORLD - 340);
     const n = randInt(2, 4);
     for (let i = 0; i < n; i++) {
       const type = pick(['crate', 'crate', 'rock', 'container']);
-      const w = type === 'crate' ? rand(56, 84) : rand(70, 146);
-      const h = type === 'crate' ? rand(56, 84) : rand(64, 134);
-      add(cx + rand(-155, 155) - w / 2, cy + rand(-155, 155) - h / 2, w, h, type);
+      const w = type === 'crate' ? rand(56, 86) : rand(72, 150);
+      const h = type === 'crate' ? rand(56, 86) : rand(64, 138);
+      add(cx + rand(-165, 165) - w / 2, cy + rand(-165, 165) - h / 2, w, h, type);
     }
   }
 
   // Scattered tactical cover & destructible supply crates.
-  for (let i = 0; i < 48; i++) {
+  for (let i = 0; i < 74; i++) {
     const type = pick(['crate', 'crate', 'rock', 'rock', 'container']);
-    const w = type === 'crate' ? rand(52, 78) : rand(54, 128);
-    const h = type === 'crate' ? rand(52, 78) : rand(54, 124);
+    const w = type === 'crate' ? rand(52, 80) : rand(56, 132);
+    const h = type === 'crate' ? rand(52, 80) : rand(56, 128);
     add(rand(130, WORLD - 130 - w), rand(130, WORLD - 130 - h), w, h, type);
   }
   return list;
@@ -1816,17 +1864,18 @@ function generateObstacles() {
 
 function generateBarrels() {
   const list = [];
-  for (let i = 0; i < 28; i++) {
+  for (let i = 0; i < 42; i++) {
     for (let tries = 0; tries < 50; tries++) {
       const anchor = i < DISTRICTS.length * 2
         ? DISTRICTS[i % DISTRICTS.length]
         : null;
       const x = anchor
-        ? clamp(anchor.x + rand(-280, 280), 140, WORLD - 140)
+        ? clamp(anchor.x + rand(-300, 300), 140, WORLD - 140)
         : rand(160, WORLD - 160);
       const y = anchor
-        ? clamp(anchor.y + rand(-280, 280), 140, WORLD - 140)
+        ? clamp(anchor.y + rand(-300, 300), 140, WORLD - 140)
         : rand(160, WORLD - 160);
+      if (inSafeZoneRect(x, y, 120)) continue;
       if (pointInObstacle(x, y, 28)) continue;
       if (list.some((b) => distance(x, y, b.x, b.y) < 110)) continue;
       list.push({
@@ -1841,24 +1890,28 @@ function generateBarrels() {
 
 function generateBoostPads() {
   const candidates = [
-    { x: WORLD * 0.20, y: WORLD * 0.42, angle: -Math.PI / 2 },
-    { x: WORLD * 0.20, y: WORLD * 0.58, angle: Math.PI / 2 },
-    { x: WORLD * 0.42, y: WORLD * 0.72, angle: 0 },
-    { x: WORLD * 0.66, y: WORLD * 0.72, angle: Math.PI },
-    { x: WORLD * 0.66, y: WORLD * 0.34, angle: -Math.PI * 0.75 },
-    { x: WORLD * 0.36, y: WORLD * 0.28, angle: Math.PI * 0.22 },
+    { x: 1280, y: WORLD * 0.34, angle: -Math.PI / 2 },
+    { x: 1280, y: WORLD * 0.56, angle: Math.PI / 2 },
+    { x: WORLD * 0.38, y: 3015, angle: 0 },
+    { x: WORLD * 0.64, y: 3015, angle: Math.PI },
+    { x: 3440, y: WORLD * 0.34, angle: Math.PI / 2 },
+    { x: 3440, y: WORLD * 0.56, angle: -Math.PI / 2 },
+    { x: WORLD * 0.38, y: WORLD * 0.28, angle: Math.PI * 0.2 },
+    { x: WORLD * 0.66, y: WORLD * 0.28, angle: Math.PI * 0.8 },
+    { x: WORLD * 0.36, y: WORLD * 0.78, angle: -Math.PI * 0.25 },
+    { x: WORLD * 0.68, y: WORLD * 0.78, angle: -Math.PI * 0.75 },
   ];
   const list = [];
   for (const c of candidates) {
     let x = c.x;
     let y = c.y;
     for (let tries = 0; tries < 25; tries++) {
-      if (!pointInObstacle(x, y, 42)) {
+      if (!inSafeZoneRect(x, y, 110) && !pointInObstacle(x, y, 42)) {
         list.push({ x, y, r: 28, angle: c.angle, pulse: rand(0, TAU) });
         break;
       }
-      x = clamp(c.x + rand(-90, 90), 160, WORLD - 160);
-      y = clamp(c.y + rand(-90, 90), 160, WORLD - 160);
+      x = clamp(c.x + rand(-110, 110), 160, WORLD - 160);
+      y = clamp(c.y + rand(-110, 110), 160, WORLD - 160);
     }
   }
   return list;
@@ -1866,18 +1919,18 @@ function generateBoostPads() {
 
 function generateDecor() {
   const list = [];
-  for (let i = 0; i < 96; i++) {
+  for (let i = 0; i < 145; i++) {
     list.push({
       type: pick(['grass', 'grass', 'dirt', 'dirt', 'crater']),
       x: rand(0, WORLD),
       y: rand(0, WORLD),
-      rx: rand(36, 120),
-      ry: rand(24, 86),
+      rx: rand(38, 128),
+      ry: rand(26, 92),
       rot: rand(0, TAU),
       alpha: rand(0.04, 0.1),
     });
   }
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i < 90; i++) {
     list.push({
       type: 'mote',
       x: rand(0, WORLD),
@@ -1892,35 +1945,37 @@ function generateDecor() {
   return list;
 }
 
+const FLOOR_WEAPON_POOL = [
+  'smg', 'smg', 'smg', 'smg', 'smg', 'smg',
+  'shotgun', 'shotgun', 'shotgun', 'shotgun', 'shotgun',
+  'revolver', 'revolver', 'revolver', 'revolver', 'revolver',
+  'rifle', 'rifle', 'rifle', 'rifle', 'rifle', 'rifle', 'rifle',
+  'pulse', 'pulse', 'pulse', 'pulse', 'pulse', 'pulse',
+  'dmr', 'dmr', 'dmr', 'dmr', 'dmr', 'dmr',
+  'lmg', 'lmg', 'lmg', 'lmg', 'lmg', 'lmg',
+  'sniper', 'sniper', 'sniper', 'sniper', 'sniper',
+  'railgun', 'minigun', 'bazooka', 'bazooka',
+];
+
 function generatePickups() {
   const defs = [];
-  // Boosted multi-tier weapon pool (52 floor spawns across T2–T5; no starter Pistol clutter):
-  // T2: 32% (16/50) · T3: 38% (19/50) · T4: 22% (11/50) · T5: 8% (4/50)
-  const pool = [
-    'smg', 'smg', 'smg', 'smg', 'smg', 'smg',
-    'shotgun', 'shotgun', 'shotgun', 'shotgun', 'shotgun',
-    'revolver', 'revolver', 'revolver', 'revolver', 'revolver',
-    'rifle', 'rifle', 'rifle', 'rifle', 'rifle', 'rifle', 'rifle',
-    'pulse', 'pulse', 'pulse', 'pulse', 'pulse', 'pulse',
-    'dmr', 'dmr', 'dmr', 'dmr', 'dmr', 'dmr',
-    'lmg', 'lmg', 'lmg', 'lmg', 'lmg', 'lmg',
-    'sniper', 'sniper', 'sniper', 'sniper', 'sniper',
-    'railgun', 'minigun', 'bazooka', 'bazooka',
-  ];
-  for (let i = 0; i < 52; i++) {
-    defs.push({ kind: 'weapon', weapon: pick(pool), skin: randomSkin(0.25) });
+  // Scaled for expanded 4400x4400 map & 30-operator Royale / continuous Practice combat
+  const weaponCount = isPracticeMode() ? 66 : 74;
+  for (let i = 0; i < weaponCount; i++) {
+    defs.push({ kind: 'weapon', weapon: pick(FLOOR_WEAPON_POOL), skin: randomSkin(0.3) });
   }
-  for (let i = 0; i < 14; i++) defs.push({ kind: 'health' });
-  for (let i = 0; i < 12; i++) defs.push({ kind: 'armor' });
-  for (let i = 0; i < 12; i++) {
+  for (let i = 0; i < 20; i++) defs.push({ kind: 'health' });
+  for (let i = 0; i < 16; i++) defs.push({ kind: 'armor' });
+  for (let i = 0; i < 16; i++) {
     defs.push({ kind: 'gadget', gadget: pick(['frag', 'frag', 'emp', 'smoke']) });
   }
 
   const list = [];
   for (const def of defs) {
     for (let tries = 0; tries < 90; tries++) {
-      const x = rand(130, WORLD - 130);
-      const y = rand(130, WORLD - 130);
+      const x = rand(140, WORLD - 140);
+      const y = rand(140, WORLD - 140);
+      if (inSafeZoneRect(x, y, 120)) continue;
       if (pointInObstacle(x, y, 36)) continue;
       if (list.some((p) => distance(x, y, p.x, p.y) < 58)) continue;
       list.push({ ...def, x, y, phase: rand(0, TAU), dropLock: 0 });
@@ -1928,19 +1983,20 @@ function generatePickups() {
     }
   }
 
-  // Curated guaranteed Tier 5 apex spawns (1 Bazooka, 1 Minigun & 1 Railgun at distinct districts).
+  // Curated guaranteed Tier 5 apex spawns (Bazooka, Minigun & Railgun at distinct districts).
   const heavySpots = DISTRICTS.slice().sort(() => Math.random() - 0.5);
   const heavyWeapons = ['bazooka', 'minigun', 'railgun'];
   for (let h = 0; h < heavyWeapons.length; h++) {
     const spot = heavySpots[h % heavySpots.length];
     for (let tries = 0; tries < 60; tries++) {
-      const x = clamp(spot.x + rand(-210, 210), 150, WORLD - 150);
-      const y = clamp(spot.y + rand(-210, 210), 150, WORLD - 150);
+      const x = clamp(spot.x + rand(-220, 220), 150, WORLD - 150);
+      const y = clamp(spot.y + rand(-220, 220), 150, WORLD - 150);
+      if (inSafeZoneRect(x, y, 120)) continue;
       if (pointInObstacle(x, y, 38)) continue;
-      if (player && distance(x, y, player.x, player.y) < 280) continue;
+      if (player && !player.inSafeZone && distance(x, y, player.x, player.y) < 280) continue;
       if (list.some((p) => distance(x, y, p.x, p.y) < 68)) continue;
       list.push({
-        kind: 'weapon', weapon: heavyWeapons[h], skin: randomSkin(0.9),
+        kind: 'weapon', weapon: heavyWeapons[h], skin: randomSkin(0.95),
         x, y, phase: rand(0, TAU), dropLock: 0,
       });
       break;
@@ -1949,13 +2005,63 @@ function generatePickups() {
   return list;
 }
 
+function generateSafeZoneLayout() {
+  safeZoneStations = [];
+  safeZoneDummies = [];
+  if (!isPracticeMode()) return;
+
+  const keysList = Object.keys(WEAPONS);
+  for (let i = 0; i < keysList.length; i++) {
+    const col = i % 6;
+    const row = Math.floor(i / 6);
+    safeZoneStations.push({
+      kind: 'weapon',
+      weapon: keysList[i],
+      x: SAFE_ZONE.x + 95 + col * 116,
+      y: SAFE_ZONE.y + 112 + row * 112,
+      r: 22,
+    });
+  }
+  const gadgetIds = ['frag', 'emp', 'smoke'];
+  for (let i = 0; i < gadgetIds.length; i++) {
+    safeZoneStations.push({
+      kind: 'gadget',
+      gadget: gadgetIds[i],
+      x: SAFE_ZONE.x + 95 + i * 104,
+      y: SAFE_ZONE.y + 392,
+      r: 21,
+    });
+  }
+  safeZoneStations.push({
+    kind: 'skin',
+    x: SAFE_ZONE.x + 440,
+    y: SAFE_ZONE.y + 392,
+    r: 24,
+  });
+
+  // Two live firing-range dummies (Unarmored & Armored) to test weapons inside Safe Zone.
+  safeZoneDummies.push(
+    {
+      id: -101, name: 'DUMMY 100HP', x: SAFE_ZONE.x + 860, y: SAFE_ZONE.y + 165,
+      r: 20, hp: 100, maxHp: 100, hpTrail: 100, armor: 0, maxArmor: 0,
+      hitFlash: 0, respawnT: 0, alive: true, flinchX: 0, flinchY: 0, isDummy: true,
+    },
+    {
+      id: -102, name: 'ARMORED 175', x: SAFE_ZONE.x + 860, y: SAFE_ZONE.y + 330,
+      r: 20, hp: 100, maxHp: 100, hpTrail: 100, armor: 75, maxArmor: 75,
+      hitFlash: 0, respawnT: 0, alive: true, flinchX: 0, flinchY: 0, isDummy: true,
+    }
+  );
+}
+
 function spawnPosition(pad = 150) {
-  for (let i = 0; i < 80; i++) {
+  for (let i = 0; i < 100; i++) {
     const x = rand(pad, WORLD - pad);
     const y = rand(pad, WORLD - pad);
-    if (!pointInObstacle(x, y, 32)) return { x, y };
+    if (inSafeZoneRect(x, y, 160)) continue;
+    if (!pointInObstacle(x, y, 34)) return { x, y };
   }
-  return { x: WORLD / 2, y: WORLD / 2 };
+  return { x: WORLD * 0.52, y: WORLD * 0.50 };
 }
 
 function planNextZone(z) {
@@ -1975,11 +2081,13 @@ function planNextZone(z) {
 }
 
 function createZone() {
+  if (getGameMode().noStorm) return null;
   const speedMul = getGameMode().stormSpeed || 1;
+  const startR = 3350;
   const z = {
-    x: WORLD / 2, y: WORLD / 2, r: 2450,
-    sx: WORLD / 2, sy: WORLD / 2, sr: 2450,
-    tx: WORLD / 2, ty: WORLD / 2, tr: 2450,
+    x: WORLD / 2, y: WORLD / 2, r: startR,
+    sx: WORLD / 2, sy: WORLD / 2, sr: startR,
+    tx: WORLD / 2, ty: WORLD / 2, tr: startR,
     nextX: WORLD / 2, nextY: WORLD / 2, nextR: 0,
     phase: 0,
     state: 'waiting',
@@ -1994,6 +2102,8 @@ function createZone() {
 function setupBackdrop() {
   player = null;
   bots = [];
+  safeZoneStations = [];
+  safeZoneDummies = [];
   obstacles = generateObstacles();
   rebuildObstacleGrid();
   barrels = generateBarrels();

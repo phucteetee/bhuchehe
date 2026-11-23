@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
-<title>BATTLEGROUND — Tactical Royale v0.1.2</title>
-<link rel="stylesheet" href="style.css?v=9" />
+<title>BATTLEGROUND — Tactical Royale v0.1.3</title>
+<link rel="stylesheet" href="style.css?v=10" />
 </head>
 <body>
 <canvas id="game"></canvas>
@@ -13,8 +13,36 @@
 <div id="ui">
   <div id="fpsBadge" class="hidden" aria-live="off">60 FPS · MED</div>
 
+  <div id="practiceBar" class="hidden" aria-label="Practice mode quick actions">
+    <button id="returnSafeBtn" type="button" class="safeReturnBtn" title="Teleport back to Safe Zone (H)">
+      <span class="safeDot" aria-hidden="true"></span>
+      <span>SAFE ZONE</span>
+      <kbd>H</kbd>
+    </button>
+  </div>
+
+  <aside id="safeZonePanel" class="hidden" aria-label="Safe Zone Weapon Armory">
+    <div class="szHead">
+      <div>
+        <span>SAFE ZONE ARMORY</span>
+        <small>FREE LOADOUT · SLOT 1 / 2</small>
+      </div>
+      <em class="szShieldTag">INVULNERABLE</em>
+    </div>
+    <div class="szSectionLabel">WEAPONS (12)</div>
+    <div id="safeZoneWeapons" class="szWeaponGrid"></div>
+    <div class="szSectionLabel">WEAPON FINISH</div>
+    <div id="safeZoneSkins" class="szChipRow"></div>
+    <div class="szSectionLabel">TACTICAL GADGET</div>
+    <div id="safeZoneGadgets" class="szChipRow threeCol"></div>
+    <button id="deployArenaBtn" type="button" class="szDeployBtn">
+      <span>TELEPORT TO COMBAT</span>
+      <kbd>T</kbd>
+    </button>
+  </aside>
+
   <div id="topbar">
-    <div class="pill"><span class="dot"></span><b id="aliveCount">20</b><span>ALIVE</span></div>
+    <div class="pill"><span class="dot"></span><b id="aliveCount">30</b><span>ALIVE</span></div>
     <div class="pill zone"><span class="zoneIcon"></span><span id="zoneText">ZONE SHRINKS IN 18s</span></div>
     <div class="pill supply"><span class="supplyIcon"></span><span id="supplyText">CACHE 01:00</span></div>
     <div class="pill"><b id="killCount">0</b><span>ELIMS</span></div>
@@ -97,6 +125,7 @@
   <button id="gadgetTouch" class="touchAction gadgetAction" type="button" aria-label="Gadget">FRAG</button>
   <button id="swapTouch" class="touchAction swapAction" type="button" aria-label="Swap weapon">SWAP</button>
   <button id="interactTouch" class="touchAction interactAction hidden" type="button" aria-label="Pick up weapon">E</button>
+  <button id="safeTouch" class="touchAction safeAction hidden" type="button" aria-label="Safe Zone Teleport">SAFE</button>
   <button id="pauseTouch" class="touchAction pauseAction" type="button" aria-label="Pause">II</button>
 </div>
 
@@ -109,7 +138,7 @@
       <div class="brandMark" aria-hidden="true"><span></span></div>
       <div class="brandTitles">
         <div class="brandLogo">BATTLE<span>GROUND</span></div>
-        <div class="brandVer">RELEASE 0.1.2 · TACTICAL ROYALE</div>
+        <div class="brandVer">RELEASE 0.1.3 · TACTICAL ROYALE</div>
       </div>
     </div>
 
@@ -191,9 +220,9 @@
 
     <!-- Center Stage: Hero Title Crest over Live Animated Arena -->
     <section class="lobbyCenter" aria-hidden="false">
-      <div class="seasonTag"><i class="liveDot"></i> SEASON 01 · RELEASE 0.1.2</div>
+      <div class="seasonTag"><i class="liveDot"></i> SEASON 01 · RELEASE 0.1.3</div>
       <h1>BATTLE<span>GROUND</span></h1>
-      <p class="tagline">Last planet standing. Dual weapons, tactical gadgets, destructible cover &amp; shrinking storm.</p>
+      <p class="tagline">30-operator expanded arena. Dual weapons, tactical gadgets, destructible cover &amp; Practice Safe Zone.</p>
       <div class="rankProgressBox">
         <div class="profileLine">
           <b id="lifetimeAura">0</b>
@@ -225,7 +254,7 @@
           <div class="ctrl"><kbd>1 2 / Q</kbd><span>Switch Gun</span></div>
           <div class="ctrl"><kbd>E / R</kbd><span>Swap / Reload</span></div>
           <div class="ctrl"><kbd>SPACE</kbd><span>Dash · i-frames</span></div>
-          <div class="ctrl"><kbd>M / ESC</kbd><span>Mute / Pause</span></div>
+          <div class="ctrl"><kbd>H / T</kbd><span>Safe Zone / TP</span></div>
         </div>
       </div>
     </section>
@@ -237,18 +266,14 @@
       <div class="modeCards" id="modeOptions">
         <button type="button" data-mode="classic" class="selected" aria-pressed="true">
           <strong>ROYALE</strong>
-          <small>20 OPS · 1.0× AURA</small>
+          <small>30 OPS · 4400M · 1.0×</small>
         </button>
-        <button type="button" data-mode="blitz" aria-pressed="false">
-          <strong>BLITZ</strong>
-          <small>16 OPS · FAST · 1.15×</small>
-        </button>
-        <button type="button" data-mode="hardcore" aria-pressed="false">
-          <strong>ELITE OPS</strong>
-          <small>45% ELITES · 1.6×</small>
+        <button type="button" data-mode="practice" aria-pressed="false">
+          <strong>PRACTICE</strong>
+          <small>20 OPS · SAFE ZONE · ∞</small>
         </button>
       </div>
-      <div id="modeDesc" class="modeSubDesc">20 operators · Classic storm &amp; supply caches</div>
+      <div id="modeDesc" class="modeSubDesc">30 operators · 4400m expanded map, extended storm &amp; supply caches</div>
     </div>
 
     <div class="footerActions">
@@ -368,7 +393,7 @@
   <div class="panel pausePanel">
     <div class="menuTopTools">
       <button type="button" class="miniChip" data-fps-toggle aria-pressed="false">FPS HUD: OFF</button>
-      <span class="verTag">v0.1.2</span>
+      <span class="verTag">v0.1.3</span>
     </div>
     <div class="eyebrow">MATCH PAUSED</div>
     <h2>HOLD POSITION</h2>
@@ -403,9 +428,10 @@
     </div>
     <div class="btnRow">
       <button id="resumeBtn" class="bigBtn"><em>RESUME</em> <span>&rarr;</span></button>
+      <button id="pauseSafeBtn" class="ghostBtn hidden">RETURN TO SAFE ZONE</button>
       <button id="quitBtn" class="ghostBtn">QUIT TO LOBBY</button>
     </div>
-    <p class="hint">Quitting forfeits unbanked AURA</p>
+    <p id="pauseHint" class="hint">Quitting forfeits unbanked AURA</p>
   </div>
 </div>
 
@@ -437,10 +463,10 @@
   </div>
 </div>
 
-<script src="js/core.js?v=9"></script>
-<script src="js/profile.js?v=9"></script>
-<script src="js/combat.js?v=9"></script>
-<script src="js/render.js?v=9"></script>
-<script src="js/main.js?v=9"></script>
+<script src="js/core.js?v=10"></script>
+<script src="js/profile.js?v=10"></script>
+<script src="js/combat.js?v=10"></script>
+<script src="js/render.js?v=10"></script>
+<script src="js/main.js?v=10"></script>
 </body>
 </html>

@@ -63,10 +63,11 @@ function startMatch() {
   barrels = generateBarrels();
   boostPads = generateBoostPads();
   decor = generateDecor();
+  generateSafeZoneLayout();
   player = createPlayer();
   bots = createBots(player.x, player.y);
   pickups = generatePickups();
-  addStarterLoot();
+  if (!mode.practice) addStarterLoot();
 
   for (const b of bullets) releaseBullet(b);
   bullets = [];
@@ -108,8 +109,10 @@ function startMatch() {
   game.auraFlash = 0;
   game.damageIndicator = 0;
   game.rewardsBanked = false;
-  game.supplyNext = mode.supplyFirst || 55;
+  game.supplyNext = mode.supplyFirst || 52;
   game.nearPickup = null;
+  game.nearStation = null;
+  game.practiceLootT = 6;
   game.rankUpNotice = null;
   game.time = 0;
   if (typeof ensureDailyChallenges === 'function') ensureDailyChallenges();
@@ -120,8 +123,12 @@ function startMatch() {
   UI.end.classList.add('hidden');
   if (UI.pickupPrompt) UI.pickupPrompt.classList.add('hidden');
   if (UI.interactTouch) UI.interactTouch.classList.add('hidden');
-  UI.countdown.classList.remove('hidden');
-  UI.countdown.querySelector('span').textContent = '3';
+  if (UI.pauseSafeBtn) UI.pauseSafeBtn.classList.toggle('hidden', !mode.practice);
+  if (UI.pauseHint) {
+    UI.pauseHint.textContent = mode.practice
+      ? 'Practice Mode · Return to Safe Zone or Exit to Lobby'
+      : 'Quitting forfeits unbanked AURA';
+  }
   UI.stormWarn.classList.remove('show');
   if (UI.streakBanner) UI.streakBanner.classList.remove('show');
   if (toastTimer) clearTimeout(toastTimer);
@@ -130,6 +137,18 @@ function startMatch() {
   document.body.classList.add('in-game', 'playing');
   setMusicMood('battle');
   if (typeof updateAudioMix === 'function') updateAudioMix();
+
+  if (mode.practice) {
+    UI.countdown.classList.add('hidden');
+    game.state = 'playing';
+    game.countdown = 0;
+    if (typeof syncSafeZonePanelUI === 'function') syncSafeZonePanelUI();
+    showToast('SAFE ZONE · PICK WEAPONS & TELEPORT', 2200, 'gold');
+  } else {
+    UI.countdown.classList.remove('hidden');
+    UI.countdown.querySelector('span').textContent = '3';
+    if (typeof syncSafeZonePanelUI === 'function') syncSafeZonePanelUI();
+  }
   updateHUD();
 }
 
@@ -250,6 +269,7 @@ function quitToMenu() {
   game.pendingEnd = null;
   game.matchTime = 0;
   game.nearPickup = null;
+  game.nearStation = null;
   resetInput();
   setMusicMood('menu');
   if (typeof updateAudioMix === 'function') updateAudioMix();
@@ -262,6 +282,9 @@ function quitToMenu() {
   UI.countdown.classList.add('hidden');
   if (UI.pickupPrompt) UI.pickupPrompt.classList.add('hidden');
   if (UI.interactTouch) UI.interactTouch.classList.add('hidden');
+  if (UI.safeZonePanel) UI.safeZonePanel.classList.add('hidden');
+  if (UI.practiceBar) UI.practiceBar.classList.add('hidden');
+  if (UI.safeTouch) UI.safeTouch.classList.add('hidden');
   UI.feed.innerHTML = '';
   UI.stormWarn.classList.remove('show');
   if (UI.streakBanner) UI.streakBanner.classList.remove('show');
@@ -327,6 +350,7 @@ function toggleMute() {
    Simulation
    --------------------------------------------------------- */
 function checkWin() {
+  if (isPracticeMode()) return;
   if (game.pendingEnd || !player || !player.alive) return;
   if (bots.every((b) => !b.alive)) {
     game.pendingEnd = { t: 1.0, win: true };
@@ -341,6 +365,7 @@ function updateMatch(dt) {
   game.matchTime += sdt;
 
   updatePlayer(sdt);
+  if (isPracticeMode()) updateSafeZone(sdt);
   for (let i = 0; i < bots.length; i++) updateBot(bots[i], sdt);
   updateBullets(sdt);
   updateProjectiles(sdt);
@@ -530,6 +555,15 @@ document.getElementById('resumeBtn').addEventListener('click', () => { sfx('ui')
 document.getElementById('quitBtn').addEventListener('click', () => { sfx('ui'); quitToMenu(); });
 const endMenuBtn = document.getElementById('endMenuBtn');
 if (endMenuBtn) endMenuBtn.addEventListener('click', () => { sfx('ui'); quitToMenu(); });
+if (UI.returnSafeBtn) UI.returnSafeBtn.addEventListener('click', () => { if (typeof returnToSafeZone === 'function') returnToSafeZone(); });
+if (UI.deployArenaBtn) UI.deployArenaBtn.addEventListener('click', () => { if (typeof teleportToCombat === 'function') teleportToCombat(); });
+if (UI.pauseSafeBtn) {
+  UI.pauseSafeBtn.addEventListener('click', () => {
+    if (game.state === 'paused') togglePause();
+    if (typeof returnToSafeZone === 'function') returnToSafeZone();
+  });
+}
+if (typeof initSafeZonePanelUI === 'function') initSafeZonePanelUI();
 
 if (typeof initProfile === 'function') initProfile();
 if (typeof updateDeployDeckUI === 'function') updateDeployDeckUI();
