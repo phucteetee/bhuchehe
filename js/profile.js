@@ -194,27 +194,32 @@ function sanitizeProfile(raw) {
 
   if (raw.weaponKills && typeof raw.weaponKills === 'object') {
     for (const key in raw.weaponKills) {
+      if (!hasOwn(WEAPONS, key)) continue;
       const v = Number(raw.weaponKills[key]);
-      if (WEAPONS[key] && Number.isFinite(v) && v > 0) p.weaponKills[key] = Math.floor(v);
+      if (Number.isFinite(v) && v > 0) p.weaponKills[key] = Math.floor(v);
     }
   }
 
   if (raw.unlocked && typeof raw.unlocked === 'object') {
     for (const id of (Array.isArray(raw.unlocked.operators) ? raw.unlocked.operators : [])) {
-      if (OPERATOR_PRESETS[id] && !p.unlocked.operators.includes(id)) p.unlocked.operators.push(id);
+      if (hasOwn(OPERATOR_PRESETS, id) && !p.unlocked.operators.includes(id)) p.unlocked.operators.push(id);
     }
     for (const id of (Array.isArray(raw.unlocked.trails) ? raw.unlocked.trails : [])) {
-      if (TRAIL_PRESETS[id] && !p.unlocked.trails.includes(id)) p.unlocked.trails.push(id);
+      if (hasOwn(TRAIL_PRESETS, id) && !p.unlocked.trails.includes(id)) p.unlocked.trails.push(id);
     }
   }
 
   if (raw.equipped && typeof raw.equipped === 'object') {
-    if (p.unlocked.operators.includes(raw.equipped.operator)) p.equipped.operator = raw.equipped.operator;
-    if (p.unlocked.trails.includes(raw.equipped.trail)) p.equipped.trail = raw.equipped.trail;
+    if (typeof raw.equipped.operator === 'string' && p.unlocked.operators.includes(raw.equipped.operator)) {
+      p.equipped.operator = raw.equipped.operator;
+    }
+    if (typeof raw.equipped.trail === 'string' && p.unlocked.trails.includes(raw.equipped.trail)) {
+      p.equipped.trail = raw.equipped.trail;
+    }
   }
 
   if (raw.challenges && typeof raw.challenges === 'object' && Array.isArray(raw.challenges.list)) {
-    p.challenges.date = typeof raw.challenges.date === 'string' ? raw.challenges.date : '';
+    p.challenges.date = typeof raw.challenges.date === 'string' ? raw.challenges.date.slice(0, 16) : '';
     p.challenges.list = raw.challenges.list
       .filter((c) => c && typeof c.id === 'string' && typeof c.metric === 'string')
       .slice(0, 3)
@@ -222,12 +227,12 @@ function sanitizeProfile(raw) {
         const goal = Math.max(1, Math.floor(Number(c.goal) || 1));
         const progress = Math.max(0, Math.min(goal, Math.floor(Number(c.progress) || 0)));
         return {
-          id: c.id,
-          group: typeof c.group === 'string' ? c.group : '',
-          metric: c.metric,
+          id: c.id.slice(0, 32),
+          group: typeof c.group === 'string' ? c.group.slice(0, 24) : '',
+          metric: c.metric.slice(0, 32),
           goal,
           reward: Math.max(0, Math.floor(Number(c.reward) || 0)),
-          name: String(c.name || c.metric),
+          name: String(c.name || c.metric).slice(0, 80),
           progress,
           done: !!c.done || progress >= goal,
         };
@@ -392,8 +397,9 @@ function track(metric, amount = 1) {
 function addMatchWeaponKills(weaponKills) {
   if (!weaponKills || typeof weaponKills !== 'object') return;
   for (const key in weaponKills) {
+    if (!hasOwn(WEAPONS, key)) continue;
     const n = Math.floor(Number(weaponKills[key]) || 0);
-    if (!WEAPONS[key] || n <= 0) continue;
+    if (n <= 0) continue;
     profile.weaponKills[key] = (profile.weaponKills[key] || 0) + n;
   }
 }
@@ -459,22 +465,26 @@ function getProfileEarned() {
    --------------------------------------------------------- */
 function getEquippedOperator() {
   const p = ensureProfile();
-  return OPERATOR_PRESETS[p.equipped.operator] || OPERATOR_PRESETS.cyan;
+  return hasOwn(OPERATOR_PRESETS, p.equipped.operator) ? OPERATOR_PRESETS[p.equipped.operator] : OPERATOR_PRESETS.cyan;
 }
 
 function getEquippedOperatorId() {
   const p = ensureProfile();
-  return OPERATOR_PRESETS[p.equipped.operator] ? p.equipped.operator : 'cyan';
+  return hasOwn(OPERATOR_PRESETS, p.equipped.operator) ? p.equipped.operator : 'cyan';
 }
 
 function getEquippedTrail() {
   const p = ensureProfile();
-  return TRAIL_PRESETS[p.equipped.trail] || TRAIL_PRESETS.none;
+  return hasOwn(TRAIL_PRESETS, p.equipped.trail) ? TRAIL_PRESETS[p.equipped.trail] : TRAIL_PRESETS.none;
 }
 
 function purchaseItem(kind, id) {
   const p = ensureProfile();
-  const item = kind === 'operator' ? OPERATOR_PRESETS[id] : kind === 'trail' ? TRAIL_PRESETS[id] : null;
+  const item = kind === 'operator'
+    ? (hasOwn(OPERATOR_PRESETS, id) ? OPERATOR_PRESETS[id] : null)
+    : kind === 'trail'
+      ? (hasOwn(TRAIL_PRESETS, id) ? TRAIL_PRESETS[id] : null)
+      : null;
   if (!item) return false;
   const list = kind === 'operator' ? p.unlocked.operators : p.unlocked.trails;
   if (list.includes(id)) {

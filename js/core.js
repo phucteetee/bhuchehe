@@ -182,6 +182,8 @@ const PERKS = {
   },
 };
 
+const hasOwn = (obj, key) => !!obj && typeof key === 'string' && Object.prototype.hasOwnProperty.call(obj, key);
+
 const PREFS_KEY = 'battleground.prefs.v1';
 const userPrefs = {
   mode: 'classic',
@@ -192,8 +194,8 @@ const userPrefs = {
 try {
   const savedPrefs = JSON.parse(localStorage.getItem(PREFS_KEY) || 'null');
   if (savedPrefs && typeof savedPrefs === 'object') {
-    if (GAME_MODES[savedPrefs.mode]) userPrefs.mode = savedPrefs.mode;
-    if (PERKS[savedPrefs.perk]) userPrefs.perk = savedPrefs.perk;
+    if (hasOwn(GAME_MODES, savedPrefs.mode)) userPrefs.mode = savedPrefs.mode;
+    if (hasOwn(PERKS, savedPrefs.perk)) userPrefs.perk = savedPrefs.perk;
     if (typeof savedPrefs.autoAdapt === 'boolean') userPrefs.autoAdapt = savedPrefs.autoAdapt;
     if (typeof savedPrefs.showFps === 'boolean') userPrefs.showFps = savedPrefs.showFps;
   }
@@ -204,7 +206,7 @@ function saveUserPrefs() {
 }
 
 function getGameMode() {
-  return GAME_MODES[userPrefs.mode] || GAME_MODES.classic;
+  return hasOwn(GAME_MODES, userPrefs.mode) ? GAME_MODES[userPrefs.mode] : GAME_MODES.classic;
 }
 
 function isPracticeMode() {
@@ -218,7 +220,7 @@ function inSafeZoneRect(x, y, pad = 0) {
 }
 
 function getPlayerPerk() {
-  return PERKS[userPrefs.perk] || PERKS.vanguard;
+  return hasOwn(PERKS, userPrefs.perk) ? PERKS[userPrefs.perk] : PERKS.vanguard;
 }
 
 function updateDeployDeckUI() {
@@ -818,7 +820,9 @@ try {
   const saved = JSON.parse(localStorage.getItem(AUDIO_KEY) || 'null');
   if (saved && typeof saved === 'object') {
     if (typeof saved.music === 'boolean') audioSettings.music = saved.music;
-    if (typeof saved.volume === 'number') audioSettings.volume = clamp(saved.volume, 0, 100);
+    if (typeof saved.volume === 'number' && Number.isFinite(saved.volume)) {
+      audioSettings.volume = clamp(saved.volume, 0, 100);
+    }
   }
 } catch (error) {}
 
@@ -1635,7 +1639,7 @@ for (const button of document.querySelectorAll('[data-fps-toggle]')) {
 }
 for (const button of document.querySelectorAll('[data-mode]')) {
   button.addEventListener('click', () => {
-    if (!GAME_MODES[button.dataset.mode]) return;
+    if (!hasOwn(GAME_MODES, button.dataset.mode)) return;
     userPrefs.mode = button.dataset.mode;
     saveUserPrefs();
     updateDeployDeckUI();
@@ -1644,7 +1648,7 @@ for (const button of document.querySelectorAll('[data-mode]')) {
 }
 for (const button of document.querySelectorAll('[data-perk]')) {
   button.addEventListener('click', () => {
-    if (!PERKS[button.dataset.perk]) return;
+    if (!hasOwn(PERKS, button.dataset.perk)) return;
     userPrefs.perk = button.dataset.perk;
     saveUserPrefs();
     updateDeployDeckUI();

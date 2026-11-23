@@ -701,6 +701,7 @@ kbd{font-family:inherit;font-size:8.5px;font-weight:800;letter-spacing:.07em;
   transition:color .16s,border-color .16s,background .16s}
 .ghostBtn:hover{color:#fff;border-color:rgba(94,231,255,.55);background:rgba(94,231,255,.1)}
 .btnRow{display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap}
+.btnRow.endActions{margin-top:20px}
 
 /* ===================== MODAL PANELS (SETTINGS, ARMORY, CAREER, PAUSE, END) ===================== */
 .panel{position:relative;background:linear-gradient(160deg,rgba(10,18,28,.9),rgba(5,10,16,.88));
