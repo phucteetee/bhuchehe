@@ -753,8 +753,8 @@ function pointInObstacle(x, y, pad = 0) {
   return findObstacleAtPoint(x, y, pad) !== null;
 }
 
-// Allocation-free Liang-Barsky segment-vs-AABB test.
-function segRect(x1, y1, x2, y2, rect, pad = 0) {
+// Allocation-free Liang-Barsky segment-vs-AABB test returning entry t in [0,1] or -1.
+function segRectT(x1, y1, x2, y2, rect, pad = 0) {
   let t0 = 0;
   let t1 = 1;
   const dx = x2 - x1;
@@ -766,7 +766,7 @@ function segRect(x1, y1, x2, y2, rect, pad = 0) {
 
   // Check X slabs
   if (dx === 0) {
-    if (x1 < minX || x1 > maxX) return false;
+    if (x1 < minX || x1 > maxX) return -1;
   } else {
     const inv = 1 / dx;
     let tx0 = (minX - x1) * inv;
@@ -774,11 +774,11 @@ function segRect(x1, y1, x2, y2, rect, pad = 0) {
     if (tx0 > tx1) { const tmp = tx0; tx0 = tx1; tx1 = tmp; }
     if (tx0 > t0) t0 = tx0;
     if (tx1 < t1) t1 = tx1;
-    if (t0 > t1) return false;
+    if (t0 > t1) return -1;
   }
   // Check Y slabs
   if (dy === 0) {
-    if (y1 < minY || y1 > maxY) return false;
+    if (y1 < minY || y1 > maxY) return -1;
   } else {
     const inv = 1 / dy;
     let ty0 = (minY - y1) * inv;
@@ -786,25 +786,41 @@ function segRect(x1, y1, x2, y2, rect, pad = 0) {
     if (ty0 > ty1) { const tmp = ty0; ty0 = ty1; ty1 = tmp; }
     if (ty0 > t0) t0 = ty0;
     if (ty1 < t1) t1 = ty1;
-    if (t0 > t1) return false;
+    if (t0 > t1) return -1;
   }
-  return true;
+  return t0;
+}
+
+function segRect(x1, y1, x2, y2, rect, pad = 0) {
+  return segRectT(x1, y1, x2, y2, rect, pad) >= 0;
 }
 
 function hasLOS(x1, y1, x2, y2) {
-  // Fast grid-accelerated ray walk using bounding cells along the segment.
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  const dist = Math.hypot(dx, dy);
-  const steps = Math.max(1, Math.ceil(dist / (GRID_CELL * 0.75)));
+  // Exact 2D DDA grid traversal so diagonal rays never skip corner obstacle cells.
   _gridStamp = (_gridStamp + 1) | 0;
   if (_gridStamp === 0) _gridStamp = 1;
   const stamp = _gridStamp;
 
-  for (let s = 0; s <= steps; s++) {
-    const t = s / steps;
-    const gx = clamp(Math.floor((x1 + dx * t) / GRID_CELL), 0, GRID_DIM - 1);
-    const gy = clamp(Math.floor((y1 + dy * t) / GRID_CELL), 0, GRID_DIM - 1);
+  let gx = clamp(Math.floor(x1 / GRID_CELL), 0, GRID_DIM - 1);
+  let gy = clamp(Math.floor(y1 / GRID_CELL), 0, GRID_DIM - 1);
+  const endX = clamp(Math.floor(x2 / GRID_CELL), 0, GRID_DIM - 1);
+  const endY = clamp(Math.floor(y2 / GRID_CELL), 0, GRID_DIM - 1);
+
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const stepX = dx > 0 ? 1 : dx < 0 ? -1 : 0;
+  const stepY = dy > 0 ? 1 : dy < 0 ? -1 : 0;
+  const tDeltaX = stepX !== 0 ? Math.abs(GRID_CELL / dx) : Infinity;
+  const tDeltaY = stepY !== 0 ? Math.abs(GRID_CELL / dy) : Infinity;
+  let tMaxX = stepX > 0
+    ? ((gx + 1) * GRID_CELL - x1) / dx
+    : stepX < 0 ? (gx * GRID_CELL - x1) / dx : Infinity;
+  let tMaxY = stepY > 0
+    ? ((gy + 1) * GRID_CELL - y1) / dy
+    : stepY < 0 ? (gy * GRID_CELL - y1) / dy : Infinity;
+
+  const maxSteps = GRID_DIM * 2 + 4;
+  for (let iter = 0; iter < maxSteps; iter++) {
     const cell = obstacleGrid[gy * GRID_DIM + gx];
     for (let i = 0; i < cell.length; i++) {
       const o = cell[i];
@@ -812,6 +828,18 @@ function hasLOS(x1, y1, x2, y2) {
       o._q = stamp;
       if (segRect(x1, y1, x2, y2, o, 3)) return false;
     }
+    if (gx === endX && gy === endY) break;
+    if (tMaxX < tMaxY && gx !== endX) {
+      gx += stepX;
+      tMaxX += tDeltaX;
+    } else if (gy !== endY) {
+      gy += stepY;
+      tMaxY += tDeltaY;
+    } else {
+      gx += stepX;
+      tMaxX += tDeltaX;
+    }
+    if (gx < 0 || gx >= GRID_DIM || gy < 0 || gy >= GRID_DIM) break;
   }
   return true;
 }
@@ -1598,7 +1626,7 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   if (e.code === 'Enter') {
-    if (typeof handleEnter === 'function') handleEnter();
+    if (typeof handleEnter === 'function' && handleEnter()) e.preventDefault();
     return;
   }
   if (game.state !== 'playing' || !player || !player.alive) return;

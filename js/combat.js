@@ -423,22 +423,42 @@ function collideEntity(e) {
   }
 }
 
-function segCircle(x1, y1, x2, y2, cx, cy, r) {
+function moveEntityWithCollision(e, moveX, moveY) {
+  const dist = Math.hypot(moveX, moveY);
+  if (dist <= 0.0001) return;
+  const maxStep = Math.max(8, e.r * 0.72);
+  const steps = Math.max(1, Math.ceil(dist / maxStep));
+  const sx = moveX / steps;
+  const sy = moveY / steps;
+  for (let i = 0; i < steps; i++) {
+    e.x += sx;
+    e.y += sy;
+    collideEntity(e);
+  }
+}
+
+function segCircleT(x1, y1, x2, y2, cx, cy, r) {
   const dx = x2 - x1;
   const dy = y2 - y1;
   const fx = x1 - cx;
   const fy = y1 - cy;
   const a = dx * dx + dy * dy;
-  if (a < 0.000001) return fx * fx + fy * fy <= r * r;
-  const b = 2 * (fx * dx + fy * dy);
   const c = fx * fx + fy * fy - r * r;
-  if (c <= 0) return true;
+  if (c <= 0) return 0;
+  if (a < 0.000001) return -1;
+  const b = 2 * (fx * dx + fy * dy);
   const disc = b * b - 4 * a * c;
-  if (disc < 0) return false;
+  if (disc < 0) return -1;
   const sq = Math.sqrt(disc);
   const t1 = (-b - sq) / (2 * a);
+  if (t1 >= 0 && t1 <= 1) return t1;
   const t2 = (-b + sq) / (2 * a);
-  return (t1 >= 0 && t1 <= 1) || (t2 >= 0 && t2 <= 1);
+  if (t2 >= 0 && t2 <= 1) return t2;
+  return -1;
+}
+
+function segCircle(x1, y1, x2, y2, cx, cy, r) {
+  return segCircleT(x1, y1, x2, y2, cx, cy, r) >= 0;
 }
 
 function lineBlockedBySmoke(x1, y1, x2, y2) {
@@ -477,6 +497,10 @@ function switchWeapon(slotIdx) {
   p.spinSoundT = 0;
   p.cooldown = Math.min(p.cooldown, 0.12);
   p.weaponChangeT = 0.22;
+  if (p.inSafeZone) {
+    safeZoneTargetSlot = slotIdx;
+    if (typeof syncSafeZonePanelUI === 'function') syncSafeZonePanelUI();
+  }
   sfx('swap');
   return true;
 }
@@ -548,14 +572,12 @@ function updateWeapon(e, dt) {
   e.walkPhase = (e.walkPhase || 0) + dt * lerp(2.8, 11.2, clamp(speedRatio, 0, 1));
   e.bobAmp = damp(e.bobAmp != null ? e.bobAmp : 0.45, lerp(0.45, 1.65, clamp(speedRatio, 0, 1)), 10, dt);
 
-  // Decay kinetic boost momentum cleanly.
+  // Decay kinetic boost momentum cleanly with swept anti-tunneling collision.
   if (Math.abs(e.boostVelX) > 4 || Math.abs(e.boostVelY) > 4) {
-    e.x += e.boostVelX * dt;
-    e.y += e.boostVelY * dt;
+    moveEntityWithCollision(e, e.boostVelX * dt, e.boostVelY * dt);
     const drag = Math.exp(-5.5 * dt);
     e.boostVelX *= drag;
     e.boostVelY *= drag;
-    collideEntity(e);
   } else {
     e.boostVelX = 0;
     e.boostVelY = 0;
@@ -587,6 +609,12 @@ function updateWeapon(e, dt) {
     e.spin = 0;
     e.heat = 0;
     e.spinSoundT = 0;
+  }
+
+  // Clear queued bursts immediately if EMP jammed.
+  if (e.jamT > 0 && e.burstLeft > 0) {
+    e.burstLeft = 0;
+    e.burstT = 0;
   }
 
   // Handle queued multi-shot bursts (Pulse AR).
@@ -647,7 +675,7 @@ function fireRound(e, angle, isBurstFollowup = false) {
   e.muzzleRise = clamp(e.muzzleRise + (Math.random() < 0.5 ? 1 : -1) * w.kick * 0.015, -0.14, 0.14);
   e.mag--;
   syncSlotFromEntity(e);
-  e.shotsFired += w.pellets;
+  if (!e.inSafeZone) e.shotsFired += w.pellets;
 
   const skin = skinInfo(e.skin);
   const dmgMul = 1 + skin.bonus;
@@ -1013,6 +1041,10 @@ function detonateEMP(x, y, g, source, inSafe = false) {
     }
     e.jamT = Math.max(e.jamT, g.jamTime);
     e.slowT = Math.max(e.slowT, g.jamTime + 0.4);
+    e.burstLeft = 0;
+    e.burstT = 0;
+    e.spin = 0;
+    e.spinSoundT = 0;
     damage(e, g.maxDmg, source, { weapon: 'EMP', dist: Math.sqrt(d2), blast: true });
     if (source === player) spawnText(e.x, e.y - 48, 'JAMMED', '#7ef2ff', 11, 0.9);
   }
@@ -1354,8 +1386,7 @@ function updatePlayer(dt) {
   p.vy = damp(p.vy || 0, targetVy, accelRate, dt);
   const speedNow = Math.hypot(p.vx, p.vy);
   if (speedNow > 1.5) {
-    p.x += p.vx * dt;
-    p.y += p.vy * dt;
+    moveEntityWithCollision(p, p.vx * dt, p.vy * dt);
     p.moveX = damp(p.moveX || 0, p.vx / Math.max(1, p.speed), 14, dt);
     p.moveY = damp(p.moveY || 0, p.vy / Math.max(1, p.speed), 14, dt);
     if (speedNow > 40) {
@@ -1393,11 +1424,9 @@ function updatePlayer(dt) {
       p.ghostT = 0.026;
       spawnParticle('planetGhost', p.x, p.y, 0, 0, 0.26, 0.26, p.r, p.operatorId, 0, 0);
     }
-    // Smooth eased dash curve: fast burst tapering gracefully into landing.
+    // Smooth eased dash curve with swept anti-tunneling collision.
     const dashSpd = 910 * (0.42 + 0.58 * prog);
-    p.x += p.dashX * dashSpd * dt;
-    p.y += p.dashY * dashSpd * dt;
-    collideEntity(p);
+    moveEntityWithCollision(p, p.dashX * dashSpd * dt, p.dashY * dashSpd * dt);
     if (p.dashT <= 0) {
       // Smooth elastic landing squash bounce.
       p.scaleX = 0.88;
@@ -1412,8 +1441,6 @@ function updatePlayer(dt) {
         }
       }
     }
-  } else if (speedNow > 1.5) {
-    collideEntity(p);
   }
 
   const trail = typeof getEquippedTrail === 'function' ? getEquippedTrail() : null;
@@ -1797,9 +1824,7 @@ function updateBot(b, dt) {
   b.vy = damp(b.vy || 0, targetVy, dashing ? 26 : 13, dt);
   const bSpd = Math.hypot(b.vx, b.vy);
   if (bSpd > 2) {
-    b.x += b.vx * dt;
-    b.y += b.vy * dt;
-    collideEntity(b);
+    moveEntityWithCollision(b, b.vx * dt, b.vy * dt);
     b.moveX = damp(b.moveX || 0, b.vx / Math.max(1, b.speed), 10, dt);
     b.moveY = damp(b.moveY || 0, b.vy / Math.max(1, b.speed), 10, dt);
     b.stepT -= dt;
@@ -1974,38 +1999,132 @@ function updateBullets(dt) {
         break;
       }
 
-      // 1. Check combat entity hits
-      let hit = null;
-      if (player && player.alive && !player.inSafeZone && player !== b.owner && player.id !== b.hitId &&
-          Math.abs(player.x - b.x) <= player.r + stepLen + 2 &&
-          Math.abs(player.y - b.y) <= player.r + stepLen + 2 &&
-          segCircle(b.x, b.y, nx, ny, player.x, player.y, player.r)) {
-        hit = player;
-      }
-      if (!hit) {
-        for (let k = 0; k < bots.length; k++) {
-          const bot = bots[k];
-          if (!bot.alive || bot === b.owner || bot.id === b.hitId) continue;
-          if (Math.abs(bot.x - b.x) > bot.r + stepLen + 2 ||
-              Math.abs(bot.y - b.y) > bot.r + stepLen + 2) continue;
-          if (segCircle(b.x, b.y, nx, ny, bot.x, bot.y, bot.r)) {
-            hit = bot;
-            break;
-          }
+      // 1. Find earliest obstacle hit along this sub-step segment (cover blocks shots first!)
+      let obsHit = null;
+      let obsT = 2;
+      const segMinX = b.x < nx ? b.x : nx;
+      const segMaxX = b.x > nx ? b.x : nx;
+      const segMinY = b.y < ny ? b.y : ny;
+      const segMaxY = b.y > ny ? b.y : ny;
+      const stepObs = queryObstacles(segMinX, segMinY, segMaxX, segMaxY);
+      for (let k = 0; k < stepObs.length; k++) {
+        const o = stepObs[k];
+        const t = segRectT(b.x, b.y, nx, ny, o, 0);
+        if (t >= 0 && t < obsT) {
+          obsT = t;
+          obsHit = o;
         }
       }
-      if (hit) {
+
+      // 2. Find earliest combat entity hit along this sub-step segment
+      let hit = null;
+      let hitT = 2;
+      if (player && player.alive && !player.inSafeZone && player !== b.owner && player.id !== b.hitId &&
+          Math.abs(player.x - b.x) <= player.r + stepLen + 2 &&
+          Math.abs(player.y - b.y) <= player.r + stepLen + 2) {
+        const t = segCircleT(b.x, b.y, nx, ny, player.x, player.y, player.r);
+        if (t >= 0 && t < hitT) { hitT = t; hit = player; }
+      }
+      for (let k = 0; k < bots.length; k++) {
+        const bot = bots[k];
+        if (!bot.alive || bot === b.owner || bot.id === b.hitId) continue;
+        if (Math.abs(bot.x - b.x) > bot.r + stepLen + 2 ||
+            Math.abs(bot.y - b.y) > bot.r + stepLen + 2) continue;
+        const t = segCircleT(b.x, b.y, nx, ny, bot.x, bot.y, bot.r);
+        if (t >= 0 && t < hitT) { hitT = t; hit = bot; }
+      }
+
+      // 3. Find earliest explosive barrel hit along this sub-step segment
+      let barHit = null;
+      let barT = 2;
+      for (let k = 0; k < barrels.length; k++) {
+        const bar = barrels[k];
+        if (!bar.alive) continue;
+        if (Math.abs(bar.x - b.x) > bar.r + stepLen + 2 ||
+            Math.abs(bar.y - b.y) > bar.r + stepLen + 2) continue;
+        const t = segCircleT(b.x, b.y, nx, ny, bar.x, bar.y, bar.r);
+        if (t >= 0 && t < barT) { barT = t; barHit = bar; }
+      }
+
+      // Resolve obstacle first if it is closer than (or tied with) any entity/barrel.
+      if (obsHit && obsT <= hitT && obsT <= barT) {
+        const ix = b.x + (nx - b.x) * obsT;
+        const iy = b.y + (ny - b.y) * obsT;
+        const hitDist = b.travelled + stepLen * obsT;
         if (b.explosive) {
-          b.x = nx;
-          b.y = ny;
-          explodeArea(nx, ny, b.splashRadius, b.splashDmg, b.owner, b.weapon, {
+          b.x = ix;
+          b.y = iy;
+          b.travelled = hitDist;
+          explodeArea(ix, iy, b.splashRadius, b.splashDmg, b.owner, b.weapon, {
+            inSafeZone: false,
+            selfDmgMul: b.selfDmgMul,
+            crateDmgMul: b.crateDmgMul,
+            knockback: b.knockback,
+            dist: hitDist,
+            countSplashHit: true,
+          });
+          done = true;
+          break;
+        }
+        spawnHitSparks(ix, iy, obsHit.type === 'crate' ? '#c99b63' : '#b7c7cf');
+        spawnDecal('chip', ix, iy, rand(2.5, 4.5), '#080c10', 0.55, b.angle);
+        if (obsHit.destructible) {
+          damageObstacle(obsHit, b.dmg * (b.crateDmgMul || 1), b.owner);
+        }
+        if (b.pierce > 0 && obsHit.destructible && obsHit.destroyed) {
+          b.pierce--;
+          obsHit = null;
+          obsT = 2;
+        } else {
+          b.x = ix;
+          b.y = iy;
+          b.travelled = hitDist;
+          done = true;
+          break;
+        }
+      }
+
+      // Resolve closer of barrel or combat entity before any obstacle behind them.
+      if (barHit && barT <= hitT && barT < obsT) {
+        const ix = b.x + (nx - b.x) * barT;
+        const iy = b.y + (ny - b.y) * barT;
+        const hitDist = b.travelled + stepLen * barT;
+        b.x = ix;
+        b.y = iy;
+        b.travelled = hitDist;
+        if (b.explosive) {
+          explodeArea(ix, iy, b.splashRadius, b.splashDmg, b.owner, b.weapon, {
+            inSafeZone: false,
+            selfDmgMul: b.selfDmgMul,
+            crateDmgMul: b.crateDmgMul,
+            knockback: b.knockback,
+            dist: hitDist,
+            countSplashHit: true,
+          });
+        } else {
+          spawnHitSparks(ix, iy, '#ff9f45');
+          damageBarrel(barHit, b.dmg, b.owner);
+        }
+        done = true;
+        break;
+      }
+
+      if (hit && hitT < obsT) {
+        const ix = b.x + (nx - b.x) * hitT;
+        const iy = b.y + (ny - b.y) * hitT;
+        const hitDist = b.travelled + stepLen * hitT;
+        if (b.explosive) {
+          b.x = ix;
+          b.y = iy;
+          b.travelled = hitDist;
+          explodeArea(ix, iy, b.splashRadius, b.splashDmg, b.owner, b.weapon, {
             inSafeZone: false,
             directTarget: hit,
             directDmg: b.dmg,
             selfDmgMul: b.selfDmgMul,
             crateDmgMul: b.crateDmgMul,
             knockback: b.knockback,
-            dist: b.travelled + stepLen * 0.5,
+            dist: hitDist,
             countSplashHit: true,
           });
           done = true;
@@ -2024,11 +2143,11 @@ function updateBullets(dt) {
           hit.boostVelX += ux * b.knockback * 4.5;
           hit.boostVelY += uy * b.knockback * 4.5;
         }
-        spawnHitSparks(nx, ny, isCrit ? '#ffd166' : b.color);
-        spawnParticle('shock', nx, ny, 0, 0, 0.22, 0.22, isCrit ? 46 : 34, isCrit ? '#ffd166' : b.color, 0);
+        spawnHitSparks(ix, iy, isCrit ? '#ffd166' : b.color);
+        spawnParticle('shock', ix, iy, 0, 0, 0.22, 0.22, isCrit ? 46 : 34, isCrit ? '#ffd166' : b.color, 0);
         damage(hit, finalDmg, b.owner === hit ? null : b.owner, {
           weapon: b.weapon,
-          dist: b.travelled + stepLen * 0.5,
+          dist: hitDist,
           crit: isCrit,
         });
 
@@ -2037,72 +2156,38 @@ function updateBullets(dt) {
           b.hitId = hit.id;
           b.dmg *= 0.82;
         } else {
-          b.x = nx;
-          b.y = ny;
+          b.x = ix;
+          b.y = iy;
+          b.travelled = hitDist;
           done = true;
           break;
         }
       }
 
-      // 2. Check explosive barrels
-      for (let k = 0; k < barrels.length; k++) {
-        const bar = barrels[k];
-        if (!bar.alive) continue;
-        if (Math.abs(bar.x - b.x) > bar.r + stepLen + 2 ||
-            Math.abs(bar.y - b.y) > bar.r + stepLen + 2) continue;
-        if (segCircle(b.x, b.y, nx, ny, bar.x, bar.y, bar.r)) {
-          b.x = nx;
-          b.y = ny;
-          if (b.explosive) {
-            explodeArea(nx, ny, b.splashRadius, b.splashDmg, b.owner, b.weapon, {
-              inSafeZone: false,
-              selfDmgMul: b.selfDmgMul,
-              crateDmgMul: b.crateDmgMul,
-              knockback: b.knockback,
-              dist: b.travelled + stepLen * 0.5,
-              countSplashHit: true,
-            });
-          } else {
-            spawnHitSparks(nx, ny, '#ff9f45');
-            damageBarrel(bar, b.dmg, b.owner);
-          }
+      // If bullet pierced an entity and then hits an obstacle in the same sub-step.
+      if (obsHit) {
+        const ix = b.x + (nx - b.x) * obsT;
+        const iy = b.y + (ny - b.y) * obsT;
+        const hitDist = b.travelled + stepLen * obsT;
+        spawnHitSparks(ix, iy, obsHit.type === 'crate' ? '#c99b63' : '#b7c7cf');
+        spawnDecal('chip', ix, iy, rand(2.5, 4.5), '#080c10', 0.55, b.angle);
+        if (obsHit.destructible) {
+          damageObstacle(obsHit, b.dmg * (b.crateDmgMul || 1), b.owner);
+        }
+        if (b.pierce > 0 && obsHit.destructible && obsHit.destroyed) {
+          b.pierce--;
+        } else {
+          b.x = ix;
+          b.y = iy;
+          b.travelled = hitDist;
           done = true;
           break;
         }
       }
-      if (done) break;
 
       b.x = nx;
       b.y = ny;
       b.travelled += stepLen;
-
-      // 3. Check Spatial Grid obstacles (including destructible crates!)
-      const obs = findObstacleAtPoint(b.x, b.y, 0);
-      if (obs) {
-        if (b.explosive) {
-          explodeArea(b.x, b.y, b.splashRadius, b.splashDmg, b.owner, b.weapon, {
-            inSafeZone: false,
-            selfDmgMul: b.selfDmgMul,
-            crateDmgMul: b.crateDmgMul,
-            knockback: b.knockback,
-            dist: b.travelled,
-            countSplashHit: true,
-          });
-          done = true;
-          break;
-        }
-        spawnHitSparks(b.x, b.y, obs.type === 'crate' ? '#c99b63' : '#b7c7cf');
-        spawnDecal('chip', b.x, b.y, rand(2.5, 4.5), '#080c10', 0.55, b.angle);
-        if (obs.destructible) {
-          damageObstacle(obs, b.dmg * (b.crateDmgMul || 1), b.owner);
-        }
-        if (b.pierce > 0 && obs.destructible && obs.destroyed) {
-          b.pierce--;
-        } else {
-          done = true;
-          break;
-        }
-      }
       if (b.travelled >= b.maxDist) {
         if (b.explosive) {
           explodeArea(b.x, b.y, b.splashRadius, b.splashDmg, b.owner, b.weapon, {
@@ -2715,6 +2800,18 @@ function combatSpawnPosition(avoidPlayerDist = 0) {
   return spawnPosition(180);
 }
 
+function getSafeZoneTargetSlot(p = player) {
+  if (!p) return 0;
+  if (safeZoneTargetSlot === 0 || safeZoneTargetSlot === 1) return safeZoneTargetSlot;
+  if (!p.slots[1] && !(p.activeSlot === 0 && p.weapon === 'pistol' && p.skin === 'factory')) {
+    return 1;
+  }
+  if (!p.slots[1] && p.activeSlot === 0 && p.weapon === 'pistol' && p.skin === 'factory') {
+    return 0;
+  }
+  return p.activeSlot;
+}
+
 function selectSafeZoneWeapon(weaponKey, skinKey = null, targetSlot = -1) {
   const p = player;
   if (!p || !p.alive || !isPracticeMode() || !p.inSafeZone) return false;
@@ -2723,19 +2820,7 @@ function selectSafeZoneWeapon(weaponKey, skinKey = null, targetSlot = -1) {
   const prevFx = _fxSafeMap;
   _fxSafeMap = true;
   syncSlotFromEntity(p);
-  let slotIdx = targetSlot;
-  if (slotIdx !== 0 && slotIdx !== 1 && (safeZoneTargetSlot === 0 || safeZoneTargetSlot === 1)) {
-    slotIdx = safeZoneTargetSlot;
-  }
-  if (slotIdx !== 0 && slotIdx !== 1) {
-    if (!p.slots[1] && !(p.activeSlot === 0 && p.weapon === 'pistol' && p.skin === 'factory')) {
-      slotIdx = 1;
-    } else if (!p.slots[1] && p.activeSlot === 0 && p.weapon === 'pistol' && p.skin === 'factory') {
-      slotIdx = 0;
-    } else {
-      slotIdx = p.activeSlot;
-    }
-  }
+  const slotIdx = (targetSlot === 0 || targetSlot === 1) ? targetSlot : getSafeZoneTargetSlot(p);
   const chosenSkin = skinKey && SKINS[skinKey] ? skinKey : (p.skin || 'factory');
   p.slots[slotIdx] = { weapon: weaponKey, skin: chosenSkin, mag: w.mag };
   p.activeSlot = slotIdx;
@@ -2901,7 +2986,14 @@ function respawnPracticeBot(b) {
   b.color = op.color;
   b.light = op.light;
   b.auraColor = elite ? '#ffd166' : op.auraColor;
-  b.name = (elite ? '★ ' : '') + pick(BOT_NAMES);
+  const usedNames = new Set();
+  for (let i = 0; i < bots.length; i++) {
+    if (bots[i] !== b && bots[i].alive) {
+      usedNames.add(bots[i].name.replace(/^★\s*/, ''));
+    }
+  }
+  const availNames = BOT_NAMES.filter((n) => !usedNames.has(n));
+  b.name = (elite ? '★ ' : '') + pick(availNames.length ? availNames : BOT_NAMES);
   b.maxHp = elite ? 135 : 100;
   b.hp = b.maxHp;
   b.hpTrail = b.maxHp;
@@ -2917,8 +3009,13 @@ function respawnPracticeBot(b) {
   b.jamT = 0; b.slowT = 0;
   b.killStreak = 0; b.streakT = 0; b.lastHitT = -99; b.hitFlash = 0;
   b.target = null; b.lootTarget = null; b.coverSpot = null; b.wander = null;
+  b._los = false; b._losTarget = null; b._losT = 0;
   for (let i = 0; i < bots.length; i++) {
     if (bots[i].target === b) bots[i].target = null;
+    if (bots[i]._losTarget === b) {
+      bots[i]._losTarget = null;
+      bots[i]._losT = 0;
+    }
   }
   b.firePause = 0;
   b.burst = wDef.spinUp ? randInt(12, 22) : (wDef.explosive ? 1 : randInt(2, 4));

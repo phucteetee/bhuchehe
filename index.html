@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
 <title>BATTLEGROUND — Tactical Royale v0.1.4</title>
-<link rel="stylesheet" href="style.css?v=11" />
+<link rel="stylesheet" href="style.css?v=13" />
 </head>
 <body>
 <canvas id="game"></canvas>
@@ -12,26 +12,37 @@
 <!-- ===================== IN-GAME TACTICAL HUD ===================== -->
 <div id="ui">
   <div id="topLeftDock">
-    <div id="fpsBadge" class="hidden" aria-live="off">60 FPS · MED</div>
-
-    <div id="practiceBar" class="hidden" aria-label="Return to Safe Zone">
-      <button id="returnSafeBtn" type="button" class="safeActionBtn" title="Return to Safe Zone Map (H)">
-        <span class="safeDot" aria-hidden="true"></span>
-        <span>SAFE ZONE</span>
-        <kbd>H</kbd>
-      </button>
+    <div id="topbar">
+      <div class="pill elims" id="elimsPill"><b id="killCount">0</b><span>ELIMS</span></div>
+      <div class="pill safe hidden" id="safePill"><span class="safeDot"></span><span>SAFE ZONE</span></div>
+      <div class="pill" id="alivePill"><span class="dot"></span><b id="aliveCount">30</b><span>ALIVE</span></div>
+      <div class="pill zone" id="zonePill"><span class="zoneIcon"></span><span id="zoneText">ZONE 1 · 30s</span></div>
+      <div class="pill supply" id="supplyPill"><span class="supplyIcon"></span><span id="supplyText">CACHE 01:00</span></div>
+      <div class="pill aura" id="auraPill"><span class="auraStar">✦</span><b id="auraCount">0</b><span>AURA</span></div>
     </div>
 
-    <div id="safeZoneControls" class="hidden" aria-label="Safe Zone quick controls">
-      <button id="toggleArmoryBtn" type="button" class="safeActionBtn" title="Open or close Quick Armory (B)">
-        <span class="safeDot" aria-hidden="true"></span>
-        <span>ARMORY</span>
-        <kbd>B</kbd>
-      </button>
-      <button id="topDeployBtn" type="button" class="safeActionBtn deploy" title="Teleport to Combat Arena (T)">
-        <span>COMBAT TP</span>
-        <kbd>T</kbd>
-      </button>
+    <div id="topLeftSub">
+      <div id="fpsBadge" class="hidden" aria-live="off">60 FPS · MED</div>
+
+      <div id="practiceBar" class="hidden" aria-label="Return to Safe Zone">
+        <button id="returnSafeBtn" type="button" class="safeActionBtn" title="Return to Safe Zone Map (H)">
+          <span class="safeDot" aria-hidden="true"></span>
+          <span>SAFE ZONE</span>
+          <kbd>H</kbd>
+        </button>
+      </div>
+
+      <div id="safeZoneControls" class="hidden" aria-label="Safe Zone quick controls">
+        <button id="toggleArmoryBtn" type="button" class="safeActionBtn" title="Open or close Quick Armory (B)">
+          <span class="safeDot" aria-hidden="true"></span>
+          <span>ARMORY</span>
+          <kbd>B</kbd>
+        </button>
+        <button id="topDeployBtn" type="button" class="safeActionBtn deploy" title="Teleport to Combat Arena (T)">
+          <span>COMBAT TP</span>
+          <kbd>T</kbd>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -58,15 +69,6 @@
       <kbd>T</kbd>
     </button>
   </aside>
-
-  <div id="topbar">
-    <div class="pill safe hidden" id="safePill"><span class="safeDot"></span><span>SAFE ZONE</span></div>
-    <div class="pill" id="alivePill"><span class="dot"></span><b id="aliveCount">30</b><span>ALIVE</span></div>
-    <div class="pill zone" id="zonePill"><span class="zoneIcon"></span><span id="zoneText">ZONE 1 · 30s</span></div>
-    <div class="pill supply" id="supplyPill"><span class="supplyIcon"></span><span id="supplyText">CACHE 01:00</span></div>
-    <div class="pill" id="elimsPill"><b id="killCount">0</b><span>ELIMS</span></div>
-    <div class="pill aura" id="auraPill"><span class="auraStar">✦</span><b id="auraCount">0</b><span>AURA</span></div>
-  </div>
 
   <div id="minimapWrap">
     <div class="hudCorners" aria-hidden="true"></div>
@@ -490,10 +492,10 @@
   </div>
 </div>
 
-<script src="js/core.js?v=11"></script>
+<script src="js/core.js?v=12"></script>
 <script src="js/profile.js?v=11"></script>
-<script src="js/combat.js?v=11"></script>
-<script src="js/render.js?v=11"></script>
-<script src="js/main.js?v=11"></script>
+<script src="js/combat.js?v=12"></script>
+<script src="js/render.js?v=12"></script>
+<script src="js/main.js?v=12"></script>
 </body>
 </html>

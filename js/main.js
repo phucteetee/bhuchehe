@@ -54,6 +54,9 @@ function startMatch() {
   if (typeof resetHUDCache === 'function') resetHUDCache();
   ensureAudio();
   resetInput();
+  if (document.activeElement && typeof document.activeElement.blur === 'function') {
+    document.activeElement.blur();
+  }
   if (typeof isCareerOpen === 'function' && isCareerOpen()) closeCareer();
   if (typeof isArmoryOpen === 'function' && isArmoryOpen()) closeArmory();
   if (typeof isSettingsOpen === 'function' && isSettingsOpen()) closeSettings();
@@ -319,6 +322,7 @@ function togglePause() {
     game.pausedFrom = game.state;
     game.state = 'paused';
     clearCountdownHide();
+    if (game.pausedFrom === 'playing') UI.countdown.classList.add('hidden');
     resetInput();
     UI.toast.className = '';
     document.body.classList.remove('playing');
@@ -328,6 +332,7 @@ function togglePause() {
     const resumeState = game.pausedFrom === 'countdown' ? 'countdown' : 'playing';
     game.state = resumeState;
     game.pausedFrom = null;
+    if (resumeState === 'playing') UI.countdown.classList.add('hidden');
     lastFrame = performance.now();
     fpsWindowStart = lastFrame;
     fpsWindowFrames = 0;
@@ -348,11 +353,12 @@ function handleEscape() {
 }
 
 function handleEnter() {
-  if (typeof isSettingsOpen === 'function' && isSettingsOpen()) return;
-  if (typeof isArmoryOpen === 'function' && isArmoryOpen()) return;
-  if (typeof isCareerOpen === 'function' && isCareerOpen()) return;
-  if (game.state === 'menu' || game.state === 'over') startMatch();
-  else if (game.state === 'paused') togglePause();
+  if (typeof isSettingsOpen === 'function' && isSettingsOpen()) return false;
+  if (typeof isArmoryOpen === 'function' && isArmoryOpen()) return false;
+  if (typeof isCareerOpen === 'function' && isCareerOpen()) return false;
+  if (game.state === 'menu' || game.state === 'over') { startMatch(); return true; }
+  if (game.state === 'paused') { togglePause(); return true; }
+  return false;
 }
 
 function toggleMute() {

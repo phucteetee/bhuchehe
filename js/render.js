@@ -3093,7 +3093,9 @@ function syncSafeZonePanelUI() {
   }
   if (!inSafe || !player) return;
 
-  const activeTarget = (safeZoneTargetSlot === 0 || safeZoneTargetSlot === 1) ? safeZoneTargetSlot : player.activeSlot;
+  const activeTarget = typeof getSafeZoneTargetSlot === 'function'
+    ? getSafeZoneTargetSlot(player)
+    : ((safeZoneTargetSlot === 0 || safeZoneTargetSlot === 1) ? safeZoneTargetSlot : player.activeSlot);
   for (const slotBtn of document.querySelectorAll('[data-sz-slot]')) {
     const s = Number(slotBtn.dataset.szSlot);
     slotBtn.classList.toggle('active', s === activeTarget);
