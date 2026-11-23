@@ -18,11 +18,11 @@ Open `index.html` in any modern desktop or mobile browser.
 | `E` | Swap nearby weapon or gadget / interact with Safe Zone pedestals |
 | `R` | Reload |
 | `Space` | Dash (brief i-frames) |
-| `H` / `T` | Practice mode: Return to Safe Zone (`H`) / Teleport to Combat (`T`) |
-| `Esc` | Pause |
+| `H` / `T` / `B` | Practice mode: Return to Safe Zone (`H`) / Teleport to Combat (`T`) / Toggle Quick Armory (`B`) |
+| `Esc` | Pause (or close Quick Armory) |
 | `M` | Mute / unmute |
 | `Enter` | Start or redeploy |
-| Touch screen | Dual-stick Move + Aim/Fire, Swap, Gadget, Interact (`E`), Reload, Dash, Safe Zone (`SAFE`/`TP`), Pause |
+| Touch screen | Dual-stick Move + Aim/Fire, Swap, Gadget, Interact (`E`), Reload, Dash, Safe Zone (`SAFE`/`TP`), Armory (`GUNS`), Pause |
 
 ## Major Gameplay Systems
 
@@ -39,7 +39,7 @@ Open `index.html` in any modern desktop or mobile browser.
 - **Match Modes & Tactical Kits**:
   - Modes:
     - **Royale**: 30 operators (`1` player + `29` bots) on the expanded `4400×4400` 8-district map with extended 9-phase storm (~5 min) and supply caches.
-    - **Practice**: Open-world training arena with a protected **Safe Zone** (free selection of all 12 weapons, all 5 finishes, all 3 gadgets, firing-range target dummies, and glowing **COMBAT TP** portal). Teleport into the combat arena with **no shrinking storm**, floor weapons spawned around the map, 19 bots wielding random weapons that continuously respawn upon death (always **20** active operators), instant random combat respawn on player death, and a one-click **`SAFE ZONE [H]`** return button.
+    - **Practice**: Dedicated **Safe Zone Map** (`1400×820` standalone armory & ballistic firing-range facility with all 12 weapons, all 5 finishes, all 3 gadgets, 3 regenerating target dummies, collapsible Quick Armory `[B]`, and glowing **COMBAT TP** portal `[T]`) separated completely from the full `4400×4400` Combat Arena. Combat Arena features **zero floor weapon drops**, **no storm or zone countdown timer**, 19 continuously respawning bots wielding random weapons (always **20** active operators), instant combat respawn, and one-click **`SAFE ZONE [H]`** return.
   - Free Tactical Kits: **Vanguard** (+30 starting Armor & 90 max), **Striker** (-22% reload, -25% dash CD, +8% crit), **Scout** (+10% speed & +35% radar range), **Medic** (faster regen to 85% HP & +55 HP medkits + speed boost).
 - **Critical Hits & Combat Feel**: Center-line precision shots trigger `1.42×` **CRIT** hits with golden spark bursts, diamond hitmarkers, and crisp chimes.
 - **Upgraded Tactical Bot AI**: Bots actively seek nearby upgrades/medkits/armor/supply drops, evade live grenades, respect smoke clouds, and elites can flush targets behind cover with gadgets.
@@ -60,6 +60,19 @@ Engineered to stay smooth on weak laptops/phones while scaling up for high-end P
   - Delayed damage-drain HP bar and off-screen supply/grenade edge indicators.
 
 ## Releases
+
+### v0.1.4
+- **Dedicated Separate Safe Zone Map (Practice Mode)**:
+  - Moved the Practice **Safe Zone** onto its own standalone `1400×820` orbital Tactical Armory & Ballistic Firing Range map — completely isolated in rendering, physics, projectiles, particles, decals, and spatial audio from the full `4400×4400` Combat Arena.
+  - Upgraded the Firing Range with distance markers (`100M` / `200M` / `300M`) and 3 regenerating target dummies (`DUMMY 100`, `ARMORED 175`, `HEAVY 250`) supporting bullets, rockets, Frag blasts, and EMP armor shred.
+  - Combat Arena is now 100% full `4400×4400` playable terrain with no Safe Zone cutout or radar box.
+- **Zero Floor Weapons & No Zone Timer in Practice Mode**:
+  - Removed all floor weapon spawns, Tier 5 apex weapon spawns, crate weapon drops, bot death weapon drops, and supply caches in Practice mode (utility pickups like medkits, armor, and gadgets still drop naturally in combat).
+  - Completely removed the storm/zone shrink countdown timer system and supply timer from both simulation and HUD in Practice mode.
+- **Unobstructed, Symmetrical UI/UX Overhaul**:
+  - Made the Safe Zone Quick Armory a collapsible slide-out drawer (`ARMORY [B]` + `SLOT 1` / `SLOT 2` switcher + close button) that starts hidden so the Safe Zone Map and firing range are 100% unobstructed; hid radar minimap and kill feed while inside the Safe Zone Map.
+  - Redesigned the in-game HUD with symmetrical `268px` bottom-left Vital Plate and compact horizontal bottom-right Weapon/Loadout Plate (reducing bottom-right height by ~78px), a unified slim top telemetry bar, a compact `162px` radar minimap, a capped 4-item translucent kill feed, and refined upper-edge toast notifications that stay clear of combat sightlines.
+  - Balanced the main lobby 3-column stage (`320px / 1fr / 320px`) for crisp symmetry across desktop and mobile viewports.
 
 ### v0.1.3
 - **Expanded Map & Longer Matches**:

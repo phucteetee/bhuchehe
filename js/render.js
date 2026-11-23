@@ -557,10 +557,12 @@ function drawObstacleShape(c, o) {
 
 function drawDecals() {
   if (!decals.length) return;
+  const inSafe = isPlayerInSafeMap();
   const v = viewBounds(80);
   ctx.save();
   for (let i = 0; i < decals.length; i++) {
     const d = decals[i];
+    if (!!d.safe !== inSafe) continue;
     if (d.x < v.l || d.x > v.r || d.y < v.t || d.y > v.b) continue;
     const fade = clamp(d.life / Math.min(6, d.maxLife), 0, 1);
     ctx.globalAlpha = d.alpha * fade;
@@ -1630,9 +1632,10 @@ function getEntityBodySprite(e) {
 }
 
 function drawEntities() {
+  const inSafe = isPlayerInSafeMap();
   const v = viewBounds(80);
   for (const e of allEntities()) {
-    if (!e.alive) continue;
+    if (!e.alive || !!e.inSafeZone !== inSafe) continue;
     if (e.x < v.l || e.x > v.r || e.y < v.t || e.y > v.b) continue;
     drawEntity(e);
   }
@@ -1837,6 +1840,7 @@ const BULLET_TRAILS = {
 };
 
 function drawBullets() {
+  const inSafe = isPlayerInSafeMap();
   const v = viewBounds(64);
   const fast = getGraphicsSettings().key === 'verylow';
   ctx.save();
@@ -1844,6 +1848,7 @@ function drawBullets() {
   ctx.lineCap = 'round';
   for (let i = 0; i < bullets.length; i++) {
     const b = bullets[i];
+    if (!!b.inSafeZone !== inSafe) continue;
     if (b.x < v.l || b.x > v.r || b.y < v.t || b.y > v.b) continue;
     const speed = Math.hypot(b.vx, b.vy) || 1;
     const ux = b.vx / speed;
@@ -1930,11 +1935,13 @@ function drawBullets() {
 
 function drawBeams() {
   if (!beams.length) return;
+  const inSafe = isPlayerInSafeMap();
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   ctx.lineCap = 'round';
   for (let i = 0; i < beams.length; i++) {
     const bm = beams[i];
+    if (!!bm.safe !== inSafe) continue;
     const a = clamp(bm.life / bm.maxLife, 0, 1);
     ctx.globalAlpha = a * 0.34;
     ctx.strokeStyle = bm.color;
@@ -1954,10 +1961,12 @@ function drawBeams() {
 
 function drawProjectiles() {
   if (!projectiles.length) return;
+  const inSafe = isPlayerInSafeMap();
   const v = viewBounds(180);
   ctx.save();
   for (let i = 0; i < projectiles.length; i++) {
     const pr = projectiles[i];
+    if (!!pr.inSafeZone !== inSafe) continue;
     if (pr.x < v.l || pr.x > v.r || pr.y < v.t || pr.y > v.b) continue;
     const progress = 1 - clamp(pr.fuse / pr.maxFuse, 0, 1);
     const blink = 0.5 + 0.5 * Math.sin(game.time * (12 + progress * 24));
@@ -2009,11 +2018,13 @@ function drawProjectiles() {
 
 function drawSmokes() {
   if (!smokes.length) return;
+  const inSafe = isPlayerInSafeMap();
   const v = viewBounds(180);
   const fast = getGraphicsSettings().key === 'verylow';
   ctx.save();
   for (let i = 0; i < smokes.length; i++) {
     const sm = smokes[i];
+    if (!!sm.inSafeZone !== inSafe) continue;
     if (sm.x < v.l || sm.x > v.r || sm.y < v.t || sm.y > v.b) continue;
     const age = sm.maxLife - sm.life;
     const grow = 0.22 + 0.78 * easeOutCubic(clamp(age / 0.75, 0, 1));
@@ -2041,11 +2052,13 @@ function drawSmokes() {
 }
 
 function drawParticles() {
+  const inSafe = isPlayerInSafeMap();
   const v = viewBounds(70);
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   for (let i = 0; i < particles.length; i++) {
     const p = particles[i];
+    if (!!p.safe !== inSafe) continue;
     if (p.x < v.l || p.x > v.r || p.y < v.t || p.y > v.b) continue;
     const a = clamp(p.life / p.maxLife, 0, 1);
     if (p.type === 'spark') {
@@ -2133,6 +2146,7 @@ function drawParticles() {
   ctx.globalCompositeOperation = 'source-over';
   for (let i = 0; i < particles.length; i++) {
     const p = particles[i];
+    if (!!p.safe !== inSafe) continue;
     if (p.type === 'spark' || p.type === 'flash' || p.type === 'muzzleRing' ||
         p.type === 'dash' || p.type === 'casing' || p.type === 'shard' ||
         p.type === 'wave') continue;
@@ -2181,6 +2195,7 @@ function drawParticles() {
 /* Dynamic soft light halos on High & Ultra using cached sprite blits! */
 function drawDynamicLights() {
   if (!getGraphicsSettings().lights) return;
+  const inSafe = isPlayerInSafeMap();
   const v = viewBounds(180);
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
@@ -2195,7 +2210,7 @@ function drawDynamicLights() {
   // Muzzle flashes & explosion flash light pools
   for (let i = 0; i < particles.length; i++) {
     const p = particles[i];
-    if (p.type !== 'flash') continue;
+    if (p.type !== 'flash' || !!p.safe !== inSafe) continue;
     if (p.x < v.l || p.x > v.r || p.y < v.t || p.y > v.b) continue;
     const a = clamp(p.life / p.maxLife, 0, 1);
     const rad = p.size * 4.5;
@@ -2203,27 +2218,29 @@ function drawDynamicLights() {
     const sp = getLightSprite(p.color || '#ffd166');
     ctx.drawImage(sp, p.x - rad, p.y - rad, rad * 2, rad * 2);
   }
-  // Supply beacons & burning barrels
-  for (let i = 0; i < pickups.length; i++) {
-    const p = pickups[i];
-    if (!p.supply) continue;
-    if (p.x < v.l || p.x > v.r || p.y < v.t || p.y > v.b) continue;
-    ctx.globalAlpha = 0.22 + 0.08 * Math.sin(game.time * 4);
-    const sp = getLightSprite('#ffd166');
-    ctx.drawImage(sp, p.x - 95, p.y - 95, 190, 190);
-  }
-  for (let i = 0; i < barrels.length; i++) {
-    const bar = barrels[i];
-    if (!bar.alive || bar.burnT <= 0) continue;
-    if (bar.x < v.l || bar.x > v.r || bar.y < v.t || bar.y > v.b) continue;
-    ctx.globalAlpha = 0.35;
-    const sp = getLightSprite('#ff7a3d');
-    ctx.drawImage(sp, bar.x - 80, bar.y - 80, 160, 160);
+  if (!inSafe) {
+    // Supply beacons & burning barrels (Combat Map only)
+    for (let i = 0; i < pickups.length; i++) {
+      const p = pickups[i];
+      if (!p.supply) continue;
+      if (p.x < v.l || p.x > v.r || p.y < v.t || p.y > v.b) continue;
+      ctx.globalAlpha = 0.22 + 0.08 * Math.sin(game.time * 4);
+      const sp = getLightSprite('#ffd166');
+      ctx.drawImage(sp, p.x - 95, p.y - 95, 190, 190);
+    }
+    for (let i = 0; i < barrels.length; i++) {
+      const bar = barrels[i];
+      if (!bar.alive || bar.burnT <= 0) continue;
+      if (bar.x < v.l || bar.x > v.r || bar.y < v.t || bar.y > v.b) continue;
+      ctx.globalAlpha = 0.35;
+      const sp = getLightSprite('#ff7a3d');
+      ctx.drawImage(sp, bar.x - 80, bar.y - 80, 160, 160);
+    }
   }
   // Flying Bazooka rocket thruster halos
   for (let i = 0; i < bullets.length; i++) {
     const b = bullets[i];
-    if (!b.explosive) continue;
+    if (!b.explosive || !!b.inSafeZone !== inSafe) continue;
     if (b.x < v.l || b.x > v.r || b.y < v.t || b.y > v.b) continue;
     ctx.globalAlpha = 0.42;
     const sp = getLightSprite('#ff7a3d');
@@ -2233,12 +2250,14 @@ function drawDynamicLights() {
 }
 
 function drawTexts() {
+  const inSafe = isPlayerInSafeMap();
   const v = viewBounds(60);
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   for (let i = 0; i < texts.length; i++) {
     const t = texts[i];
+    if (!!t.safe !== inSafe) continue;
     if (t.x < v.l || t.x > v.r || t.y < v.t || t.y > v.b) continue;
     const age = t.maxLife - t.life;
     const pop = age < 0.14 ? 0.5 + 0.5 * easeOutBack(age / 0.14) : 1;
@@ -2444,19 +2463,21 @@ let lockTargetAt = -1;
 
 function findLockTarget() {
   if (!player || !player.alive) return null;
-  if (lockTargetCache && lockTargetCache.alive && game.time - lockTargetAt < 0.08) {
+  const inSafe = isPlayerInSafeMap();
+  if (lockTargetCache && lockTargetCache.alive && !!lockTargetCache.isDummy === inSafe && game.time - lockTargetAt < 0.08) {
     return lockTargetCache;
   }
+  const pool = inSafe ? safeZoneDummies : bots;
   let best = null;
   let bestDist = Infinity;
-  for (const b of bots) {
+  for (const b of pool) {
     if (!b.alive) continue;
     const d = distance(player.x, player.y, b.x, b.y);
     if (d > 950 || d >= bestDist) continue;
     const s = worldToScreen(b.x, b.y);
     if (s.x < -40 || s.x > W + 40 || s.y < -40 || s.y > H + 40) continue;
     if (Math.hypot(s.x - mouse.x, s.y - mouse.y) > 40) continue;
-    if (!hasLOS(player.x, player.y, b.x, b.y)) continue;
+    if (!inSafe && !hasLOS(player.x, player.y, b.x, b.y)) continue;
     best = b;
     bestDist = d;
   }
@@ -2474,6 +2495,10 @@ function drawCrosshair() {
   if (!player || !player.alive) return;
   if (game.state !== 'playing' && game.state !== 'countdown') return;
   if (touchState && touchState.aimActive) return;
+  if (isSafeZonePanelOpen() && UI.safeZonePanel) {
+    const r = UI.safeZonePanel.getBoundingClientRect();
+    if (mouse.x >= r.left && mouse.x <= r.right && mouse.y >= r.top && mouse.y <= r.bottom) return;
+  }
 
   const dt = clamp(game.time - _crosshairLastT, 0.001, 0.05);
   _crosshairLastT = game.time;
@@ -2610,74 +2635,210 @@ function drawDamageIndicator() {
 }
 
 /* ---------------------------------------------------------
-   Practice Safe Zone Sanctuary (Armory Pedestals, Dummies & Portal)
+   Dedicated Separate Safe Zone Map (Armory Bay, Firing Range & Portal)
    --------------------------------------------------------- */
-function drawSafeZone() {
-  if (!isPracticeMode()) return;
-  const v = viewBounds(140);
-  const sz = SAFE_ZONE;
-  if (sz.x + sz.w < v.l || sz.x > v.r || sz.y + sz.h < v.t || sz.y > v.b) return;
+let safeZonePanelOpen = false;
+
+function isSafeZonePanelOpen() {
+  return !!(safeZonePanelOpen && isPlayerInSafeMap());
+}
+
+function setSafeZonePanelOpen(open) {
+  safeZonePanelOpen = !!open;
+  if (typeof syncSafeZonePanelUI === 'function') syncSafeZonePanelUI();
+}
+
+function toggleSafeZonePanel() {
+  if (!isPlayerInSafeMap()) return;
+  safeZonePanelOpen = !safeZonePanelOpen;
+  sfx('ui');
+  if (typeof syncSafeZonePanelUI === 'function') syncSafeZonePanelUI();
+}
+
+function drawSafeZoneMap() {
+  if (!isPlayerInSafeMap()) return;
   const t = game.time;
+  const mw = SAFE_MAP_W;
+  const mh = SAFE_MAP_H;
 
   ctx.save();
-  // Sanctuary armored floor deck
-  ctx.fillStyle = 'rgba(7,19,28,0.92)';
-  rr(ctx, sz.x, sz.y, sz.w, sz.h, 14);
-  ctx.fill();
-
-  // Subtle cyan sanctuary grid inside deck
-  ctx.strokeStyle = 'rgba(94,231,255,0.065)';
+  // Deep orbital void grid surrounding the standalone sanctuary facility
+  const v = viewBounds(80);
+  ctx.fillStyle = '#04080e';
+  ctx.fillRect(v.l, v.t, v.r - v.l, v.b - v.t);
+  ctx.strokeStyle = 'rgba(94,231,255,0.032)';
   ctx.lineWidth = 1;
   ctx.beginPath();
-  for (let gx = sz.x + 60; gx < sz.x + sz.w; gx += 60) {
-    ctx.moveTo(gx, sz.y + 8); ctx.lineTo(gx, sz.y + sz.h - 8);
+  const gx0 = Math.floor(v.l / 120) * 120;
+  const gy0 = Math.floor(v.t / 120) * 120;
+  for (let gx = gx0; gx <= v.r; gx += 120) { ctx.moveTo(gx, v.t); ctx.lineTo(gx, v.b); }
+  for (let gy = gy0; gy <= v.b; gy += 120) { ctx.moveTo(v.l, gy); ctx.lineTo(v.r, gy); }
+  ctx.stroke();
+
+  // Facility outer drop shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.65)';
+  rr(ctx, 20, 26, mw - 24, mh - 24, 18);
+  ctx.fill();
+
+  // Main sanctuary armored hangar deck
+  const deckGrad = ctx.createRadialGradient(mw * 0.42, mh * 0.48, 80, mw * 0.5, mh * 0.5, mw * 0.68);
+  deckGrad.addColorStop(0, '#0f1e2c');
+  deckGrad.addColorStop(0.6, '#0a1520');
+  deckGrad.addColorStop(1, '#070e17');
+  ctx.fillStyle = deckGrad;
+  rr(ctx, 22, 22, mw - 44, mh - 44, 16);
+  ctx.fill();
+
+  // Subtle architectural deck grid
+  ctx.strokeStyle = 'rgba(94,231,255,0.05)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let gx = 80; gx < mw - 24; gx += 60) {
+    ctx.moveTo(gx, 28); ctx.lineTo(gx, mh - 28);
   }
-  for (let gy = sz.y + 60; gy < sz.y + sz.h; gy += 60) {
-    ctx.moveTo(sz.x + 8, gy); ctx.lineTo(sz.x + sz.w - 8, gy);
+  for (let gy = 80; gy < mh - 24; gy += 60) {
+    ctx.moveTo(28, gy); ctx.lineTo(mw - 28, gy);
   }
   ctx.stroke();
 
-  // Firing range bay divider line
-  const rangeX = sz.x + 768;
-  ctx.strokeStyle = 'rgba(255,159,69,0.22)';
-  ctx.lineWidth = 2;
-  ctx.setLineDash([8, 8]);
+  // --- BAY 1: ARMORY DECK (Top-Left, Weapons) ---
+  ctx.fillStyle = 'rgba(7,16,24,0.62)';
+  rr(ctx, 68, 122, 782, 260, 10);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(94,231,255,0.18)';
+  ctx.lineWidth = 1.4;
+  ctx.stroke();
+
+  // --- BAY 2: TACTICAL GEAR & FINISH FORGE (Mid-Left) ---
+  ctx.fillStyle = 'rgba(7,16,24,0.56)';
+  rr(ctx, 68, 396, 782, 112, 10);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(94,231,255,0.15)';
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+
+  // --- BAY 3: DEPLOYMENT STAGING DECK (Bottom-Left) ---
+  ctx.fillStyle = 'rgba(9,19,29,0.58)';
+  rr(ctx, 68, 522, 782, 240, 10);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,179,71,0.18)';
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+
+  // Spawn pad circle
+  ctx.save();
+  ctx.strokeStyle = 'rgba(94,231,255,0.22)';
+  ctx.lineWidth = 1.6;
+  ctx.setLineDash([7, 7]);
   ctx.beginPath();
-  ctx.moveTo(rangeX, sz.y + 38);
-  ctx.lineTo(rangeX, sz.y + 440);
+  ctx.arc(SAFE_ZONE_SPAWN.x, SAFE_ZONE_SPAWN.y, 40, 0, TAU);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.font = '800 8px "Segoe UI", system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = 'rgba(94,231,255,0.45)';
+  ctx.fillText('SPAWN PAD', SAFE_ZONE_SPAWN.x, SAFE_ZONE_SPAWN.y + 46);
+  ctx.restore();
+
+  // Animated runway chevrons leading from Spawn Pad to Combat Teleport Portal
+  ctx.save();
+  const scroll = (t * 36) % 24;
+  ctx.strokeStyle = 'rgba(255,209,102,0.42)';
+  ctx.lineWidth = 2.2;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (let k = 0; k < 7; k++) {
+    const cx = SAFE_ZONE_SPAWN.x + 80 + k * 24 + scroll;
+    if (cx > SAFE_ZONE_PORTAL.x - 62) continue;
+    const cy = lerp(SAFE_ZONE_SPAWN.y, SAFE_ZONE_PORTAL.y, (cx - SAFE_ZONE_SPAWN.x) / (SAFE_ZONE_PORTAL.x - SAFE_ZONE_SPAWN.x));
+    ctx.globalAlpha = 0.25 + 0.45 * Math.sin(((cx - SAFE_ZONE_SPAWN.x) / 180) * Math.PI);
+    ctx.beginPath();
+    ctx.moveTo(cx - 5, cy - 8);
+    ctx.lineTo(cx + 4, cy);
+    ctx.lineTo(cx - 5, cy + 8);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // --- BAY 4: BALLISTIC FIRING RANGE (Right Half) ---
+  ctx.fillStyle = 'rgba(6,12,18,0.74)';
+  rr(ctx, 886, 122, 446, 640, 10);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,159,69,0.28)';
+  ctx.lineWidth = 1.6;
+  ctx.stroke();
+
+  // Firing line caution stripes & range distance lines
+  ctx.strokeStyle = 'rgba(255,159,69,0.32)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([10, 10]);
+  ctx.beginPath();
+  ctx.moveTo(886, 134); ctx.lineTo(886, 750);
   ctx.stroke();
   ctx.setLineDash([]);
 
-  // Floor headers
+  ctx.strokeStyle = 'rgba(255,179,71,0.09)';
+  ctx.lineWidth = 1.2;
+  ctx.font = '800 9px "Segoe UI", system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = 'rgba(255,179,71,0.34)';
+  for (const [rx, label] of [[990, '100M'], [1115, '200M'], [1240, '300M']]) {
+    ctx.beginPath();
+    ctx.moveTo(rx, 152); ctx.lineTo(rx, 748);
+    ctx.stroke();
+    ctx.fillText(label, rx, 134);
+  }
+  // Recessed lane guides behind each target dummy
+  ctx.strokeStyle = 'rgba(94,231,255,0.08)';
+  ctx.lineWidth = 1;
+  for (const ly of [230, 428, 626]) {
+    ctx.beginPath();
+    ctx.moveTo(902, ly); ctx.lineTo(1312, ly);
+    ctx.stroke();
+  }
+
+  // Crisp facility floor headers
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
-  ctx.font = '800 13px "Segoe UI", system-ui, sans-serif';
-  ctx.fillStyle = 'rgba(94,231,255,0.55)';
-  ctx.fillText('SAFE ZONE · FREE WEAPON ARMORY', sz.x + 24, sz.y + 18);
-  ctx.font = '700 9.5px "Segoe UI", system-ui, sans-serif';
-  ctx.fillStyle = 'rgba(170,210,226,0.45)';
-  ctx.fillText('WALK UP & PRESS [E] OR USE QUICK LOADOUT · STEP ON PORTAL OR PRESS [T] TO DEPLOY', sz.x + 24, sz.y + 37);
+  ctx.font = '900 13.5px "Segoe UI", system-ui, sans-serif';
+  ctx.fillStyle = 'rgba(94,231,255,0.72)';
+  ctx.fillText('SAFE ZONE FACILITY · WEAPON ARMORY', 70, 62);
+  ctx.font = '700 9px "Segoe UI", system-ui, sans-serif';
+  ctx.fillStyle = 'rgba(165,204,220,0.52)';
+  ctx.fillText('WALK TO PEDESTAL [E] · QUICK ARMORY [B] · ENTER PORTAL OR PRESS [T] TO DEPLOY', 70, 82);
+
+  ctx.font = '800 9px "Segoe UI", system-ui, sans-serif';
+  ctx.fillStyle = 'rgba(94,231,255,0.48)';
+  ctx.fillText('ALL 12 WEAPONS · TIER 1 → TIER 5', 84, 134);
+  ctx.fillText('TACTICAL GADGETS & WEAPON FINISH FORGE', 84, 405);
+  ctx.fillStyle = 'rgba(255,179,71,0.56)';
+  ctx.fillText('DEPLOYMENT DECK', 84, 534);
 
   ctx.textAlign = 'center';
-  ctx.font = '800 10px "Segoe UI", system-ui, sans-serif';
-  ctx.fillStyle = 'rgba(255,179,71,0.58)';
-  ctx.fillText('FIRING RANGE', sz.x + 860, sz.y + 46);
+  ctx.font = '900 12px "Segoe UI", system-ui, sans-serif';
+  ctx.fillStyle = 'rgba(255,179,71,0.72)';
+  ctx.fillText('BALLISTIC FIRING RANGE', 1109, 64);
+  ctx.font = '700 8.5px "Segoe UI", system-ui, sans-serif';
+  ctx.fillStyle = 'rgba(170,204,218,0.44)';
+  ctx.fillText('LIVE DAMAGE · CRIT · BLAST & EMP TARGETS', 1109, 82);
 
-  // Glowing force-field perimeter wall
-  const pulse = 0.5 + 0.5 * Math.sin(t * 3.2);
-  ctx.strokeStyle = `rgba(94,231,255,${0.2 + pulse * 0.12})`;
+  // Glowing perimeter sanctuary forcefield walls
+  const pulse = 0.5 + 0.5 * Math.sin(t * 2.8);
+  ctx.strokeStyle = `rgba(94,231,255,${0.16 + pulse * 0.1})`;
   ctx.lineWidth = 10;
-  rr(ctx, sz.x, sz.y, sz.w, sz.h, 14);
+  rr(ctx, 22, 22, mw - 44, mh - 44, 16);
   ctx.stroke();
   ctx.strokeStyle = '#5ee7ff';
-  ctx.lineWidth = 2.6;
-  rr(ctx, sz.x, sz.y, sz.w, sz.h, 14);
+  ctx.lineWidth = 2.4;
+  rr(ctx, 22, 22, mw - 44, mh - 44, 16);
   ctx.stroke();
-  ctx.setLineDash([14, 14]);
-  ctx.lineDashOffset = -t * 26;
-  ctx.strokeStyle = 'rgba(200,248,255,0.75)';
-  ctx.lineWidth = 1.2;
-  rr(ctx, sz.x + 5, sz.y + 5, sz.w - 10, sz.h - 10, 10);
+  ctx.setLineDash([16, 16]);
+  ctx.lineDashOffset = -t * 24;
+  ctx.strokeStyle = 'rgba(200,248,255,0.58)';
+  ctx.lineWidth = 1.1;
+  rr(ctx, 28, 28, mw - 56, mh - 56, 12);
   ctx.stroke();
   ctx.setLineDash([]);
 
@@ -2694,7 +2855,15 @@ function drawSafeZone() {
 
     ctx.save();
     ctx.translate(st.x, st.y);
-    ctx.fillStyle = near ? 'rgba(20,44,60,0.95)' : 'rgba(9,18,26,0.9)';
+    if (near || activeEquip) {
+      ctx.globalAlpha = near ? 0.24 : 0.14;
+      ctx.fillStyle = near ? '#5ee7ff' : '#ffd166';
+      ctx.beginPath();
+      ctx.arc(0, 0, st.r + 11, 0, TAU);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    ctx.fillStyle = near ? 'rgba(20,44,60,0.96)' : 'rgba(9,18,26,0.92)';
     ctx.beginPath();
     ctx.arc(0, 0, st.r + (near ? 3 : 0), 0, TAU);
     ctx.fill();
@@ -2704,40 +2873,39 @@ function drawSafeZone() {
 
     if (isWeapon) {
       const L = w.len + 20;
-      const sc = Math.min(0.46, 26 / L);
+      const sc = Math.min(0.46, 27 / L);
       ctx.save();
       ctx.rotate(-0.28);
       ctx.scale(sc, sc);
       ctx.translate(-L / 2, 0);
       drawGunSprite(ctx, w, col, w.tier >= 5);
       ctx.restore();
-      ctx.font = '800 8.5px "Segoe UI", system-ui, sans-serif';
+      ctx.font = '800 9px "Segoe UI", system-ui, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
       ctx.fillStyle = near ? '#ffffff' : col;
       ctx.fillText(w.name, 0, st.r + 6);
       ctx.font = '700 7.5px "Segoe UI", system-ui, sans-serif';
       ctx.fillStyle = 'rgba(160,196,210,0.65)';
-      ctx.fillText('T' + w.tier, 0, st.r + 17);
+      ctx.fillText('T' + w.tier, 0, st.r + 18);
     } else if (isGadget) {
       ctx.fillStyle = col;
       ctx.beginPath(); ctx.arc(0, 1, 6.5, 0, TAU); ctx.fill();
       ctx.fillStyle = '#081016';
       ctx.fillRect(-3, -8.5, 6, 3.5);
-      ctx.font = '800 8.5px "Segoe UI", system-ui, sans-serif';
+      ctx.font = '800 9px "Segoe UI", system-ui, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
       ctx.fillStyle = near ? '#ffffff' : col;
       ctx.fillText(g.name, 0, st.r + 6);
     } else {
-      // Skin Forge pedestal
       const sk = skinInfo(player ? player.skin : 'factory');
       ctx.fillStyle = sk.color;
       ctx.beginPath();
       ctx.moveTo(0, -10); ctx.lineTo(9, 0); ctx.lineTo(0, 10); ctx.lineTo(-9, 0);
       ctx.closePath();
       ctx.fill();
-      ctx.font = '800 8.5px "Segoe UI", system-ui, sans-serif';
+      ctx.font = '800 9px "Segoe UI", system-ui, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
       ctx.fillStyle = near ? '#ffffff' : sk.color;
@@ -2746,40 +2914,40 @@ function drawSafeZone() {
     ctx.restore();
   }
 
-  // Glowing Combat Teleport Portal
+  // Glowing Combat Deployment Portal
   const pt = SAFE_ZONE_PORTAL;
   ctx.save();
   ctx.translate(pt.x, pt.y);
-  const grad = ctx.createRadialGradient(0, 0, 6, 0, 0, pt.r + 14);
-  grad.addColorStop(0, 'rgba(94,231,255,0.45)');
-  grad.addColorStop(0.6, 'rgba(255,179,71,0.18)');
+  const grad = ctx.createRadialGradient(0, 0, 8, 0, 0, pt.r + 22);
+  grad.addColorStop(0, 'rgba(94,231,255,0.48)');
+  grad.addColorStop(0.58, 'rgba(255,179,71,0.2)');
   grad.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = grad;
-  ctx.beginPath(); ctx.arc(0, 0, pt.r + 14, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc(0, 0, pt.r + 22, 0, TAU); ctx.fill();
 
   ctx.strokeStyle = '#ffd166';
   ctx.lineWidth = 3;
   ctx.beginPath(); ctx.arc(0, 0, pt.r, 0, TAU); ctx.stroke();
   ctx.save();
   ctx.rotate(t * 1.4);
-  ctx.setLineDash([12, 10]);
+  ctx.setLineDash([13, 10]);
   ctx.strokeStyle = '#5ee7ff';
   ctx.lineWidth = 2.4;
-  ctx.beginPath(); ctx.arc(0, 0, pt.r - 9, 0, TAU); ctx.stroke();
+  ctx.beginPath(); ctx.arc(0, 0, pt.r - 10, 0, TAU); ctx.stroke();
   ctx.restore();
   ctx.save();
   ctx.rotate(-t * 2.1);
   ctx.setLineDash([6, 8]);
   ctx.strokeStyle = '#ffe5a3';
   ctx.lineWidth = 1.6;
-  ctx.beginPath(); ctx.arc(0, 0, pt.r - 19, 0, TAU); ctx.stroke();
+  ctx.beginPath(); ctx.arc(0, 0, pt.r - 20, 0, TAU); ctx.stroke();
   ctx.restore();
 
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = '900 10px "Segoe UI", system-ui, sans-serif';
+  ctx.font = '900 10.5px "Segoe UI", system-ui, sans-serif';
   ctx.fillStyle = '#ffffff';
-  ctx.fillText('COMBAT TP', 0, -4);
+  ctx.fillText('COMBAT TP', 0, -5);
   ctx.font = '800 8px "Segoe UI", system-ui, sans-serif';
   ctx.fillStyle = '#ffd166';
   ctx.fillText('WALK IN · [T]', 0, 9);
@@ -2800,11 +2968,11 @@ function drawSafeZone() {
       ctx.restore();
       continue;
     }
-    ctx.fillStyle = 'rgba(0,0,0,0.42)';
+    ctx.fillStyle = 'rgba(0,0,0,0.44)';
     ctx.beginPath(); ctx.ellipse(2, 9, dm.r, dm.r * 0.55, 0, 0, TAU); ctx.fill();
-    ctx.fillStyle = dm.hitFlash > 0 ? '#ffffff' : (dm.maxArmor > 0 ? '#1b475c' : '#4a252a');
+    ctx.fillStyle = dm.hitFlash > 0 ? '#ffffff' : (dm.maxArmor >= 100 ? '#3a224d' : dm.maxArmor > 0 ? '#1b475c' : '#4a252a');
     ctx.beginPath(); ctx.arc(0, 0, dm.r, 0, TAU); ctx.fill();
-    ctx.strokeStyle = dm.maxArmor > 0 ? '#67d9ff' : '#ff7a59';
+    ctx.strokeStyle = dm.maxArmor >= 100 ? '#b06cff' : dm.maxArmor > 0 ? '#67d9ff' : '#ff7a59';
     ctx.lineWidth = 2.4;
     ctx.stroke();
     // Bullseye target rings
@@ -2814,7 +2982,7 @@ function drawSafeZone() {
     ctx.fillStyle = '#ffd166';
     ctx.beginPath(); ctx.arc(0, 0, 3.5, 0, TAU); ctx.fill();
     // HP & Armor bars
-    const bw = 50;
+    const bw = 54;
     const by = -dm.r - 16;
     ctx.fillStyle = 'rgba(2,6,10,0.85)';
     ctx.fillRect(-bw / 2, by, bw, 4.5);
@@ -2832,7 +3000,7 @@ function drawSafeZone() {
     ctx.font = '700 8.5px "Segoe UI", system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'bottom';
-    ctx.fillStyle = 'rgba(225,245,255,0.85)';
+    ctx.fillStyle = 'rgba(225,245,255,0.88)';
     ctx.fillText(dm.name, 0, by - (dm.armor > 0 ? 5.5 : 3));
     ctx.restore();
   }
@@ -2840,6 +3008,19 @@ function drawSafeZone() {
 }
 
 function initSafeZonePanelUI() {
+  for (const slotBtn of document.querySelectorAll('[data-sz-slot]')) {
+    slotBtn.addEventListener('click', () => {
+      const s = Number(slotBtn.dataset.szSlot);
+      if (s !== 0 && s !== 1) return;
+      safeZoneTargetSlot = s;
+      if (player && player.slots[s] && typeof switchWeapon === 'function') {
+        switchWeapon(s);
+      } else {
+        sfx('ui');
+      }
+      syncSafeZonePanelUI();
+    });
+  }
   if (UI.safeZoneWeapons) {
     let html = '';
     for (const key in WEAPONS) {
@@ -2884,15 +3065,39 @@ function initSafeZonePanelUI() {
 }
 
 function syncSafeZonePanelUI() {
-  const practice = isPracticeMode() && game.state === 'playing' && player && player.alive;
-  const inSafe = !!(practice && player.inSafeZone);
-  if (UI.safeZonePanel) UI.safeZonePanel.classList.toggle('hidden', !inSafe);
-  if (UI.practiceBar) UI.practiceBar.classList.toggle('hidden', !(practice && !inSafe));
+  const practiceMode = isPracticeMode();
+  const activePlay = practiceMode && game.state === 'playing' && player && player.alive;
+  const inSafe = !!(activePlay && player.inSafeZone);
+  const drawerOpen = !!(inSafe && safeZonePanelOpen);
+
+  if (UI.safeZonePanel) UI.safeZonePanel.classList.toggle('hidden', !drawerOpen);
+  if (UI.safeZoneControls) UI.safeZoneControls.classList.toggle('hidden', !inSafe);
+  if (UI.practiceBar) UI.practiceBar.classList.toggle('hidden', !(activePlay && !inSafe));
+  if (UI.toggleArmoryBtn) UI.toggleArmoryBtn.classList.toggle('active', drawerOpen);
+
+  // Clean non-obstructive HUD visibility by mode & map
+  if (UI.zonePill) UI.zonePill.classList.toggle('hidden', practiceMode);
+  if (UI.supplyPill) UI.supplyPill.classList.toggle('hidden', practiceMode);
+  if (UI.safePill) UI.safePill.classList.toggle('hidden', !inSafe);
+  if (UI.alivePill) UI.alivePill.classList.toggle('hidden', inSafe);
+  if (UI.minimapWrap) UI.minimapWrap.classList.toggle('hidden', inSafe);
+  if (UI.feed) UI.feed.classList.toggle('hidden', inSafe);
+
   if (UI.safeTouch) {
-    UI.safeTouch.classList.toggle('hidden', !practice);
-    if (practice) UI.safeTouch.textContent = inSafe ? 'TP' : 'SAFE';
+    UI.safeTouch.classList.toggle('hidden', !activePlay);
+    if (activePlay) UI.safeTouch.textContent = inSafe ? 'TP' : 'SAFE';
+  }
+  if (UI.armoryTouch) {
+    UI.armoryTouch.classList.toggle('hidden', !inSafe);
+    UI.armoryTouch.classList.toggle('active', drawerOpen);
   }
   if (!inSafe || !player) return;
+
+  const activeTarget = (safeZoneTargetSlot === 0 || safeZoneTargetSlot === 1) ? safeZoneTargetSlot : player.activeSlot;
+  for (const slotBtn of document.querySelectorAll('[data-sz-slot]')) {
+    const s = Number(slotBtn.dataset.szSlot);
+    slotBtn.classList.toggle('active', s === activeTarget);
+  }
   if (UI.safeZoneWeapons) {
     for (const btn of UI.safeZoneWeapons.querySelectorAll('[data-sz-weapon]')) {
       btn.classList.toggle('active', btn.dataset.szWeapon === player.weapon);
@@ -2914,8 +3119,9 @@ function syncSafeZonePanelUI() {
    Main Render Pipeline
    --------------------------------------------------------- */
 function render() {
+  const inSafeMap = isPlayerInSafeMap();
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-  ctx.fillStyle = '#05080c';
+  ctx.fillStyle = inSafeMap ? '#04080e' : '#05080c';
   ctx.fillRect(0, 0, W, H);
 
   // Smooth harmonic multi-frequency trauma shake + directional recoil kick (zero jagged noise).
@@ -2933,31 +3139,44 @@ function render() {
   ctx.scale(cam.zoom, cam.zoom);
   ctx.translate(-cam.x, -cam.y);
 
-  drawGround();
-  drawSafeZone();
-  drawDecals();
-  drawBoostPads();
-  drawPickups();
-  drawObstaclesAndBarrels();
-  drawAimLine();
-  drawEntities();
-  drawDamageIndicator();
-  drawBullets();
-  drawBeams();
-  drawProjectiles();
-  drawParticles();
-  drawSmokes();
-  drawDynamicLights();
-  drawTexts();
+  if (inSafeMap) {
+    drawSafeZoneMap();
+    drawDecals();
+    drawAimLine();
+    drawEntities();
+    drawBullets();
+    drawBeams();
+    drawProjectiles();
+    drawParticles();
+    drawSmokes();
+    drawDynamicLights();
+    drawTexts();
+  } else {
+    drawGround();
+    drawDecals();
+    drawBoostPads();
+    drawPickups();
+    drawObstaclesAndBarrels();
+    drawAimLine();
+    drawEntities();
+    drawDamageIndicator();
+    drawBullets();
+    drawBeams();
+    drawProjectiles();
+    drawParticles();
+    drawSmokes();
+    drawDynamicLights();
+    drawTexts();
+  }
 
   ctx.restore();
 
-  drawZoneOverlay();
-  drawOffscreenIndicators();
+  if (!inSafeMap && !isPracticeMode()) drawZoneOverlay();
+  if (!inSafeMap) drawOffscreenIndicators();
   drawAuraFlash();
   drawCrosshair();
   updateHUD();
-  drawMinimap();
+  if (!inSafeMap) drawMinimap();
 }
 
 /* ---------------------------------------------------------
@@ -3275,77 +3494,78 @@ function updateHUD() {
     if (UI.dashTouch) UI.dashTouch.style.setProperty('--dash-progress', dashProgress);
   }
 
-  if (zone) {
-    let label;
-    if (zone.state === 'waiting') {
-      label = 'ZONE ' + (zone.phase + 1) + ' · CLOSES ' + Math.max(0, Math.ceil(zone.timer)) + 's';
-    } else if (zone.state === 'shrinking') {
-      label = 'ZONE ' + (zone.phase + 1) + ' · CLOSING ' + Math.max(0, Math.ceil(zone.timer)) + 's';
-    } else {
-      label = 'FINAL ZONE';
+  if (!isPracticeMode()) {
+    if (zone) {
+      let label;
+      if (zone.state === 'waiting') {
+        label = 'ZONE ' + (zone.phase + 1) + ' · ' + Math.max(0, Math.ceil(zone.timer)) + 's';
+      } else if (zone.state === 'shrinking') {
+        label = 'ZONE ' + (zone.phase + 1) + ' · CLOSING ' + Math.max(0, Math.ceil(zone.timer)) + 's';
+      } else {
+        label = 'FINAL ZONE';
+      }
+      if (label !== hudCache.zone) {
+        hudCache.zone = label;
+        UI.zone.textContent = label;
+      }
+      const closing = zone.state === 'shrinking';
+      if (closing !== hudCache.zoneClosing) {
+        hudCache.zoneClosing = closing;
+        UI.zone.parentElement.classList.toggle('closing', closing);
+      }
     }
-    if (label !== hudCache.zone) {
-      hudCache.zone = label;
-      UI.zone.textContent = label;
-    }
-    const closing = zone.state === 'shrinking';
-    if (closing !== hudCache.zoneClosing) {
-      hudCache.zoneClosing = closing;
-      UI.zone.parentElement.classList.toggle('closing', closing);
-    }
-  } else if (isPracticeMode()) {
-    const label = player.inSafeZone ? 'SAFE ZONE · ARMORY' : 'PRACTICE · NO STORM';
-    if (label !== hudCache.zone) {
-      hudCache.zone = label;
-      UI.zone.textContent = label;
-    }
-    if (hudCache.zoneClosing !== false) {
-      hudCache.zoneClosing = false;
-      UI.zone.parentElement.classList.remove('closing');
-    }
-  }
 
-  if (UI.supply && game.supplyNext != null) {
-    const supplyLeft = Math.max(0, game.supplyNext - game.matchTime);
-    const supplyText = supplyLeft > 0 ? 'CACHE ' + formatTime(supplyLeft) : 'CACHE LIVE';
-    if (supplyText !== hudCache.supply) {
-      hudCache.supply = supplyText;
-      UI.supply.textContent = supplyText;
-      UI.supply.parentElement.classList.toggle('active', supplyLeft <= 0);
+    if (UI.supply && game.supplyNext != null) {
+      const supplyLeft = Math.max(0, game.supplyNext - game.matchTime);
+      const supplyText = supplyLeft > 0 ? 'CACHE ' + formatTime(supplyLeft) : 'CACHE LIVE';
+      if (supplyText !== hudCache.supply) {
+        hudCache.supply = supplyText;
+        UI.supply.textContent = supplyText;
+        UI.supply.parentElement.classList.toggle('active', supplyLeft <= 0);
+      }
     }
-  }
 
-  let outside = false;
-  if (player.alive && zone) {
-    const zdx = player.x - zone.x;
-    const zdy = player.y - zone.y;
-    outside = zdx * zdx + zdy * zdy > zone.r * zone.r;
-  }
-  if (outside !== hudCache.warn) {
-    hudCache.warn = !!outside;
-    UI.stormWarn.classList.toggle('show', !!outside);
-    if (!outside) { hudCache.warnAngle = null; hudCache.warnDist = ''; }
-  }
-  if (outside && zone) {
-    const dx = zone.x - player.x;
-    const dy = zone.y - player.y;
-    const dist = Math.hypot(dx, dy);
-    const angle = Math.round(Math.atan2(dy, dx) * 100) / 100;
-    if (angle !== hudCache.warnAngle && UI.warnArrow) {
-      hudCache.warnAngle = angle;
-      UI.warnArrow.style.setProperty('--warn-angle', (angle * 180 / Math.PI + 90).toFixed(0) + 'deg');
+    let outside = false;
+    if (player.alive && zone) {
+      const zdx = player.x - zone.x;
+      const zdy = player.y - zone.y;
+      outside = zdx * zdx + zdy * zdy > zone.r * zone.r;
     }
-    const meters = Math.max(0, Math.round((dist - zone.r) / 10));
-    const distText = meters + 'm';
-    if (distText !== hudCache.warnDist && UI.warnDist) {
-      hudCache.warnDist = distText;
-      UI.warnDist.textContent = distText;
+    if (outside !== hudCache.warn) {
+      hudCache.warn = !!outside;
+      UI.stormWarn.classList.toggle('show', !!outside);
+      if (!outside) { hudCache.warnAngle = null; hudCache.warnDist = ''; }
     }
-  }
-  const storm = Math.round((game.stormPulse || 0) * 100) / 100;
-  if (storm !== hudCache.storm) {
-    hudCache.storm = storm;
-    UI.stormVignette.style.opacity = storm.toFixed(2);
+    if (outside && zone) {
+      const dx = zone.x - player.x;
+      const dy = zone.y - player.y;
+      const dist = Math.hypot(dx, dy);
+      const angle = Math.round(Math.atan2(dy, dx) * 100) / 100;
+      if (angle !== hudCache.warnAngle && UI.warnArrow) {
+        hudCache.warnAngle = angle;
+        UI.warnArrow.style.setProperty('--warn-angle', (angle * 180 / Math.PI + 90).toFixed(0) + 'deg');
+      }
+      const meters = Math.max(0, Math.round((dist - zone.r) / 10));
+      const distText = meters + 'm';
+      if (distText !== hudCache.warnDist && UI.warnDist) {
+        hudCache.warnDist = distText;
+        UI.warnDist.textContent = distText;
+      }
+    }
+    const storm = Math.round((game.stormPulse || 0) * 100) / 100;
+    if (storm !== hudCache.storm) {
+      hudCache.storm = storm;
+      UI.stormVignette.style.opacity = storm.toFixed(2);
+    }
+  } else {
+    if (hudCache.warn !== false) {
+      hudCache.warn = false;
+      UI.stormWarn.classList.remove('show');
+    }
+    if (hudCache.storm !== 0) {
+      hudCache.storm = 0;
+      UI.stormVignette.style.opacity = '0';
+    }
   }
   const hurt = Math.round(clamp(game.hurt * 0.9, 0, 1) * 100) / 100;
   if (hurt !== hudCache.hurt) {
@@ -3370,11 +3590,11 @@ function addFeed(killerName, victimName, byStorm, isPlayer, weaponKey, isBlast, 
     el.innerHTML = `<b${killerStyle}>${escapeHtml(killerName)}</b>${weapon}<span>eliminated</span><b class="victim">${escapeHtml(victimName)}</b>`;
   }
   UI.feed.appendChild(el);
-  while (UI.feed.children.length > 6) UI.feed.firstChild.remove();
+  while (UI.feed.children.length > 4) UI.feed.firstChild.remove();
   setTimeout(() => {
     el.classList.add('out');
-    setTimeout(() => el.remove(), 450);
-  }, 5000);
+    setTimeout(() => el.remove(), 380);
+  }, 4200);
 }
 
 function pulseAura() {
@@ -3456,6 +3676,8 @@ function drawMinimap() {
   const mmDpr = Math.min(DPR, 1.5);
   const sizeKey = S + 'x' + mmDpr;
   if (!minimapStatic || minimapStaticObstacles !== obstacles || minimapStaticSize !== sizeKey) {
+    minimap.width = Math.max(1, Math.floor(S * mmDpr));
+    minimap.height = Math.max(1, Math.floor(S * mmDpr));
     buildMinimapStatic(S, mmDpr);
     minimapStaticObstacles = obstacles;
     minimapStaticSize = sizeKey;
@@ -3472,15 +3694,6 @@ function drawMinimap() {
   const mapX = (x) => pad + x * k;
   const mapY = (y) => pad + y * k;
 
-  // Practice Safe Zone marker on radar
-  if (isPracticeMode()) {
-    mctx.fillStyle = 'rgba(94,231,255,0.16)';
-    mctx.fillRect(mapX(SAFE_ZONE.x), mapY(SAFE_ZONE.y), SAFE_ZONE.w * k, SAFE_ZONE.h * k);
-    mctx.strokeStyle = 'rgba(94,231,255,0.85)';
-    mctx.lineWidth = 1.2;
-    mctx.strokeRect(mapX(SAFE_ZONE.x), mapY(SAFE_ZONE.y), SAFE_ZONE.w * k, SAFE_ZONE.h * k);
-  }
-
   // Live intact destructible crates on radar (vanish cleanly when shattered)
   mctx.fillStyle = 'rgba(196,154,96,0.22)';
   for (let i = 0; i < obstacles.length; i++) {
@@ -3489,7 +3702,7 @@ function drawMinimap() {
     mctx.fillRect(mapX(o.x), mapY(o.y), Math.max(1, o.w * k), Math.max(1, o.h * k));
   }
 
-  if (zone) {
+  if (zone && !isPracticeMode()) {
     mctx.save();
     mctx.beginPath();
     mctx.rect(0, 0, S, S);
@@ -3519,7 +3732,7 @@ function drawMinimap() {
 
   if (player) {
     const radar = player.radarRange || 1550;
-    if (zone) {
+    if (zone && !isPracticeMode()) {
       const zdx = zone.x - player.x;
       const zdy = zone.y - player.y;
       if (zdx * zdx + zdy * zdy > zone.r * zone.r) {

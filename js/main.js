@@ -78,15 +78,21 @@ function startMatch() {
   clearDecals();
   texts = [];
   pings = [];
-  zone = createZone();
+  zone = mode.practice ? null : createZone();
   if (typeof invalidateRenderCaches === 'function') invalidateRenderCaches();
+  if (typeof setSafeZonePanelOpen === 'function') setSafeZonePanelOpen(false);
+  safeZoneTargetSlot = -1;
 
-  cam.x = player.x;
-  cam.y = player.y;
-  cam.leadX = 0;
-  cam.leadY = 0;
-  cam.kickX = 0;
-  cam.kickY = 0;
+  if (typeof snapCameraToPlayer === 'function') {
+    snapCameraToPlayer();
+  } else {
+    cam.x = player.x;
+    cam.y = player.y;
+    cam.leadX = 0;
+    cam.leadY = 0;
+    cam.kickX = 0;
+    cam.kickY = 0;
+  }
   game.state = 'countdown';
   game.pausedFrom = null;
   game.countdown = 3.0;
@@ -109,10 +115,9 @@ function startMatch() {
   game.auraFlash = 0;
   game.damageIndicator = 0;
   game.rewardsBanked = false;
-  game.supplyNext = mode.supplyFirst || 52;
+  game.supplyNext = mode.practice ? Infinity : (mode.supplyFirst || 52);
   game.nearPickup = null;
   game.nearStation = null;
-  game.practiceLootT = 6;
   game.rankUpNotice = null;
   game.time = 0;
   if (typeof ensureDailyChallenges === 'function') ensureDailyChallenges();
@@ -123,6 +128,8 @@ function startMatch() {
   UI.end.classList.add('hidden');
   if (UI.pickupPrompt) UI.pickupPrompt.classList.add('hidden');
   if (UI.interactTouch) UI.interactTouch.classList.add('hidden');
+  if (UI.zonePill) UI.zonePill.classList.toggle('hidden', !!mode.practice);
+  if (UI.supplyPill) UI.supplyPill.classList.toggle('hidden', !!mode.practice);
   if (UI.pauseSafeBtn) UI.pauseSafeBtn.classList.toggle('hidden', !mode.practice);
   if (UI.pauseHint) {
     UI.pauseHint.textContent = mode.practice
@@ -143,7 +150,7 @@ function startMatch() {
     game.state = 'playing';
     game.countdown = 0;
     if (typeof syncSafeZonePanelUI === 'function') syncSafeZonePanelUI();
-    showToast('SAFE ZONE · PICK WEAPONS & TELEPORT', 2200, 'gold');
+    showToast('SAFE ZONE · [E] PEDESTALS · [B] ARMORY · [T] COMBAT', 2400, 'gold');
   } else {
     UI.countdown.classList.remove('hidden');
     UI.countdown.querySelector('span').textContent = '3';
@@ -282,9 +289,18 @@ function quitToMenu() {
   UI.countdown.classList.add('hidden');
   if (UI.pickupPrompt) UI.pickupPrompt.classList.add('hidden');
   if (UI.interactTouch) UI.interactTouch.classList.add('hidden');
+  if (typeof setSafeZonePanelOpen === 'function') setSafeZonePanelOpen(false);
   if (UI.safeZonePanel) UI.safeZonePanel.classList.add('hidden');
   if (UI.practiceBar) UI.practiceBar.classList.add('hidden');
+  if (UI.safeZoneControls) UI.safeZoneControls.classList.add('hidden');
   if (UI.safeTouch) UI.safeTouch.classList.add('hidden');
+  if (UI.armoryTouch) UI.armoryTouch.classList.add('hidden');
+  if (UI.safePill) UI.safePill.classList.add('hidden');
+  if (UI.alivePill) UI.alivePill.classList.remove('hidden');
+  if (UI.zonePill) UI.zonePill.classList.remove('hidden');
+  if (UI.supplyPill) UI.supplyPill.classList.remove('hidden');
+  if (UI.minimapWrap) UI.minimapWrap.classList.remove('hidden');
+  if (UI.feed) UI.feed.classList.remove('hidden');
   UI.feed.innerHTML = '';
   UI.stormWarn.classList.remove('show');
   if (UI.streakBanner) UI.streakBanner.classList.remove('show');
@@ -327,6 +343,7 @@ function handleEscape() {
   if (typeof isSettingsOpen === 'function' && isSettingsOpen()) { closeSettings(); return; }
   if (typeof isArmoryOpen === 'function' && isArmoryOpen()) { closeArmory(); return; }
   if (typeof isCareerOpen === 'function' && isCareerOpen()) { closeCareer(); return; }
+  if (typeof isSafeZonePanelOpen === 'function' && isSafeZonePanelOpen()) { setSafeZonePanelOpen(false); return; }
   if (game.state === 'playing' || game.state === 'countdown' || game.state === 'paused') togglePause();
 }
 
@@ -373,9 +390,11 @@ function updateMatch(dt) {
   updateBarrels(sdt);
   updateBoostPads(sdt);
   updatePickups(sdt);
-  updateZone(sdt);
+  if (!isPracticeMode()) {
+    updateZone(sdt);
+    updateSupplyDrop(sdt);
+  }
   updateFx(sdt);
-  updateSupplyDrop(sdt);
   updateCamera(dt);
   checkWin();
 
@@ -557,6 +576,9 @@ const endMenuBtn = document.getElementById('endMenuBtn');
 if (endMenuBtn) endMenuBtn.addEventListener('click', () => { sfx('ui'); quitToMenu(); });
 if (UI.returnSafeBtn) UI.returnSafeBtn.addEventListener('click', () => { if (typeof returnToSafeZone === 'function') returnToSafeZone(); });
 if (UI.deployArenaBtn) UI.deployArenaBtn.addEventListener('click', () => { if (typeof teleportToCombat === 'function') teleportToCombat(); });
+if (UI.topDeployBtn) UI.topDeployBtn.addEventListener('click', () => { if (typeof teleportToCombat === 'function') teleportToCombat(); });
+if (UI.toggleArmoryBtn) UI.toggleArmoryBtn.addEventListener('click', () => { if (typeof toggleSafeZonePanel === 'function') toggleSafeZonePanel(); });
+if (UI.closeSafeZoneBtn) UI.closeSafeZoneBtn.addEventListener('click', () => { if (typeof setSafeZonePanelOpen === 'function') setSafeZonePanelOpen(false); });
 if (UI.pauseSafeBtn) {
   UI.pauseSafeBtn.addEventListener('click', () => {
     if (game.state === 'paused') togglePause();

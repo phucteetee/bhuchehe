@@ -63,6 +63,7 @@ function spawnDecal(type, x, y, r, color, alpha = 0.45, angle = 0) {
   d.angle = angle;
   d.life = type === 'scorch' ? 35 : 18;
   d.maxLife = d.life;
+  d.safe = !!_fxSafeMap;
   decals.push(d);
   return d;
 }
@@ -84,7 +85,7 @@ function trimDecalsToQuality() {
 
 function spawnBeam(x1, y1, x2, y2, color, width = 3, life = 0.34) {
   if (beams.length >= 24) beams.shift();
-  beams.push({ x1, y1, x2, y2, color, width, life, maxLife: life });
+  beams.push({ x1, y1, x2, y2, color, width, life, maxLife: life, safe: !!_fxSafeMap });
 }
 
 function shuffle(arr) {
@@ -259,7 +260,7 @@ function makeEntity(opts) {
 function createPlayer() {
   const practice = isPracticeMode();
   const pos = practice
-    ? { x: SAFE_ZONE.x + 310, y: SAFE_ZONE.y + 545 }
+    ? { x: SAFE_ZONE_SPAWN.x, y: SAFE_ZONE_SPAWN.y }
     : spawnPosition(220);
   const operatorId = typeof getEquippedOperatorId === 'function' ? getEquippedOperatorId() : 'cyan';
   const op = typeof getEquippedOperator === 'function'
@@ -357,42 +358,24 @@ const _collideBuf = [];
 
 function collideEntity(e) {
   const m = 40;
-  if (isPracticeMode()) {
-    if (e.inSafeZone) {
-      const pad = e.r + 12;
-      e.x = clamp(e.x, SAFE_ZONE.x + pad, SAFE_ZONE.x + SAFE_ZONE.w - pad);
-      e.y = clamp(e.y, SAFE_ZONE.y + pad, SAFE_ZONE.y + SAFE_ZONE.h - pad);
-      for (let i = 0; i < safeZoneDummies.length; i++) {
-        const d = safeZoneDummies[i];
-        if (!d.alive) continue;
-        const dx = e.x - d.x;
-        const dy = e.y - d.y;
-        const minDist = e.r + d.r;
-        const d2 = dx * dx + dy * dy;
-        if (d2 < minDist * minDist && d2 > 0.0001) {
-          const dist = Math.sqrt(d2);
-          e.x += (dx / dist) * (minDist - dist);
-          e.y += (dy / dist) * (minDist - dist);
-        }
+  if (e.inSafeZone) {
+    const pad = e.r + 36;
+    e.x = clamp(e.x, pad, SAFE_MAP_W - pad);
+    e.y = clamp(e.y, pad, SAFE_MAP_H - pad);
+    for (let i = 0; i < safeZoneDummies.length; i++) {
+      const d = safeZoneDummies[i];
+      if (!d.alive) continue;
+      const dx = e.x - d.x;
+      const dy = e.y - d.y;
+      const minDist = e.r + d.r;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < minDist * minDist && d2 > 0.0001) {
+        const dist = Math.sqrt(d2);
+        e.x += (dx / dist) * (minDist - dist);
+        e.y += (dy / dist) * (minDist - dist);
       }
-      return;
     }
-    // Keep combat entities outside the Safe Zone force-field barrier.
-    const sx0 = SAFE_ZONE.x - e.r;
-    const sx1 = SAFE_ZONE.x + SAFE_ZONE.w + e.r;
-    const sy0 = SAFE_ZONE.y - e.r;
-    const sy1 = SAFE_ZONE.y + SAFE_ZONE.h + e.r;
-    if (e.x > sx0 && e.x < sx1 && e.y > sy0 && e.y < sy1) {
-      const left = e.x - sx0;
-      const right = sx1 - e.x;
-      const top = e.y - sy0;
-      const bottom = sy1 - e.y;
-      const min = Math.min(left, right, top, bottom);
-      if (min === left) e.x = sx0;
-      else if (min === right) e.x = sx1;
-      else if (min === top) e.y = sy0;
-      else e.y = sy1;
-    }
+    return;
   }
   e.x = clamp(e.x, m, WORLD - m);
   e.y = clamp(e.y, m, WORLD - m);
@@ -461,7 +444,7 @@ function segCircle(x1, y1, x2, y2, cx, cy, r) {
 function lineBlockedBySmoke(x1, y1, x2, y2) {
   for (let i = 0; i < smokes.length; i++) {
     const sm = smokes[i];
-    if (sm.life <= 0.4) continue;
+    if (sm.inSafeZone || sm.life <= 0.4) continue;
     if (segCircle(x1, y1, x2, y2, sm.x, sm.y, sm.r * 0.88)) return true;
   }
   return false;
@@ -510,12 +493,15 @@ function startReload(e) {
   e.spin = 0;
   e.spinSoundT = 0;
   if (e.isPlayer) {
+    const prevFx = _fxSafeMap;
+    _fxSafeMap = !!e.inSafeZone;
     const side = Math.random() < 0.5 ? -1 : 1;
     const ejectAngle = e.angle + side * Math.PI / 2;
     spawnParticle('casing', e.x + Math.cos(e.angle) * 10, e.y + Math.sin(e.angle) * 10,
       Math.cos(ejectAngle) * 72, Math.sin(ejectAngle) * 72,
       0.32, 0.32, 4.2, '#91d8e6', 5, e.angle);
     sfx('reload');
+    _fxSafeMap = prevFx;
   }
 }
 
@@ -647,9 +633,12 @@ function updateWeapon(e, dt) {
 }
 
 function fireRound(e, angle, isBurstFollowup = false) {
+  const prevFx = _fxSafeMap;
+  _fxSafeMap = !!e.inSafeZone;
   const w = WEAPONS[e.weapon];
   if (e.mag <= 0) {
     startReload(e);
+    _fxSafeMap = prevFx;
     return false;
   }
   const kickImpulse = w.kick * (isBurstFollowup ? 0.65 : 1.0);
@@ -673,7 +662,7 @@ function fireRound(e, angle, isBurstFollowup = false) {
 
   const rawMx = e.x + Math.cos(angle) * (e.r + 16);
   const rawMy = e.y + Math.sin(angle) * (e.r + 16);
-  const muzzleBlocked = !hasLOS(e.x, e.y, rawMx, rawMy);
+  const muzzleBlocked = !e.inSafeZone && !hasLOS(e.x, e.y, rawMx, rawMy);
   const mx = muzzleBlocked ? e.x + Math.cos(angle) * (e.r - 2) : rawMx;
   const my = muzzleBlocked ? e.y + Math.sin(angle) * (e.r - 2) : rawMy;
   const flashX = muzzleBlocked ? mx : e.x + Math.cos(angle) * (w.len + 20);
@@ -769,12 +758,13 @@ function fireRound(e, angle, isBurstFollowup = false) {
     game.shake = Math.max(game.shake, w.kick);
     const kickScale = w.model === 'minigun' ? 0.45 : 0.72;
     kickCamera(-Math.cos(angle) * w.kick * kickScale, -Math.sin(angle) * w.kick * kickScale);
-  } else {
+  } else if (!e.inSafeZone && !isPlayerInSafeMap()) {
     addGunPing(e.x, e.y);
   }
   sfx(w.sound, e.x, e.y);
 
   if (e.mag <= 0) startReload(e);
+  _fxSafeMap = prevFx;
   return true;
 }
 
@@ -801,6 +791,8 @@ function tryFire(e, angle) {
    --------------------------------------------------------- */
 function throwGadget(e, targetX, targetY) {
   if (!e || !e.alive || e.gadgetCharges <= 0 || e.gadgetCd > 0) return false;
+  const prevFx = _fxSafeMap;
+  _fxSafeMap = !!e.inSafeZone;
   const g = GADGETS[e.gadget] || GADGETS.frag;
   e.gadgetCharges--;
   e.gadgetCd = 0.65;
@@ -815,7 +807,7 @@ function throwGadget(e, targetX, targetY) {
 
   let spawnX = e.x + ux * (e.r + 10);
   let spawnY = e.y + uy * (e.r + 10);
-  if (pointInObstacle(spawnX, spawnY, 7)) {
+  if (!e.inSafeZone && pointInObstacle(spawnX, spawnY, 7)) {
     spawnX = e.x;
     spawnY = e.y;
   }
@@ -823,6 +815,7 @@ function throwGadget(e, targetX, targetY) {
   projectiles.push({
     kind: g.id,
     owner: e,
+    inSafeZone: !!e.inSafeZone,
     x: spawnX,
     y: spawnY,
     vx: ux * speed,
@@ -836,6 +829,7 @@ function throwGadget(e, targetX, targetY) {
     spin: rand(0, TAU),
   });
   sfx('throw', e.x, e.y);
+  _fxSafeMap = prevFx;
   return true;
 }
 
@@ -859,6 +853,9 @@ function tryUseGadget() {
 }
 
 function explodeArea(x, y, radius, maxDmg, source, tag = 'BLAST', opts = {}) {
+  const inSafe = opts.inSafeZone != null ? !!opts.inSafeZone : !!(source && source.inSafeZone);
+  const prevFx = _fxSafeMap;
+  _fxSafeMap = inSafe;
   const selfMul = opts.selfDmgMul != null ? opts.selfDmgMul : 0.55;
   const crateMul = opts.crateDmgMul != null ? opts.crateDmgMul : 1.15;
   const kbForce = opts.knockback != null ? opts.knockback : 320;
@@ -889,19 +886,38 @@ function explodeArea(x, y, radius, maxDmg, source, tag = 'BLAST', opts = {}) {
       rand(0.55, 1.15), 1.15, rand(12, 24), '#5b636b', 2);
   }
 
-  if (player && player.alive) {
+  if (player && player.alive && !!player.inSafeZone === inSafe) {
     const pd = distance(x, y, player.x, player.y);
     if (pd < 700) game.shake = Math.max(game.shake, (1 - pd / 700) * 11);
   }
 
-  // Damage entities in blast radius with falloff, direct-hit bonus & knockback.
-  const blastInSafe = inSafeZoneRect(x, y, 0);
-  let splashHitEnemy = false;
   const r2 = radius * radius;
+  // Separate Safe Zone Map explosions ONLY affect firing-range target dummies.
+  if (inSafe) {
+    if (safeZoneDummies.length) {
+      for (let i = 0; i < safeZoneDummies.length; i++) {
+        const dm = safeZoneDummies[i];
+        if (!dm.alive) continue;
+        const isDirect = !!(directTarget && dm === directTarget);
+        const dx = dm.x - x;
+        const dy = dm.y - y;
+        const d2 = dx * dx + dy * dy;
+        if (!isDirect && d2 > r2) continue;
+        const d = Math.sqrt(d2) || 1;
+        const falloff = isDirect ? 1 : clamp(1 - (d / radius) * 0.72, 0.28, 1);
+        const dmg = isDirect ? (maxDmg + directDmg) : (maxDmg * falloff);
+        damageDummy(dm, dmg, source, { directHit: isDirect });
+      }
+    }
+    _fxSafeMap = prevFx;
+    return;
+  }
+
+  // Combat Map explosions affect combat entities, crates & fuel barrels.
+  let splashHitEnemy = false;
   const blastTargets = allEntities().slice();
   for (const e of blastTargets) {
-    if (!e.alive) continue;
-    if (isPracticeMode() && !!e.inSafeZone !== blastInSafe) continue;
+    if (!e.alive || e.inSafeZone) continue;
     const isDirect = !!(directTarget && e === directTarget);
     const dx = e.x - x;
     const dy = e.y - y;
@@ -919,22 +935,6 @@ function explodeArea(x, y, radius, maxDmg, source, tag = 'BLAST', opts = {}) {
       blast: true,
       directHit: isDirect,
     });
-  }
-  // Safe Zone explosions also damage firing-range Target Dummies cleanly.
-  if (blastInSafe && safeZoneDummies.length) {
-    for (let i = 0; i < safeZoneDummies.length; i++) {
-      const dm = safeZoneDummies[i];
-      if (!dm.alive) continue;
-      const isDirect = !!(directTarget && dm === directTarget);
-      const dx = dm.x - x;
-      const dy = dm.y - y;
-      const d2 = dx * dx + dy * dy;
-      if (!isDirect && d2 > r2) continue;
-      const d = Math.sqrt(d2) || 1;
-      const falloff = isDirect ? 1 : clamp(1 - (d / radius) * 0.72, 0.28, 1);
-      const dmg = isDirect ? (maxDmg + directDmg) : (maxDmg * falloff);
-      damageDummy(dm, dmg, source, { directHit: isDirect });
-    }
   }
   if (opts.countSplashHit && !directTarget && splashHitEnemy && source === player) {
     player.shotsHit++;
@@ -963,9 +963,12 @@ function explodeArea(x, y, radius, maxDmg, source, tag = 'BLAST', opts = {}) {
       if (bar.burnT <= 0) bar.burnT = 0.14;
     }
   }
+  _fxSafeMap = prevFx;
 }
 
-function detonateEMP(x, y, g, source) {
+function detonateEMP(x, y, g, source, inSafe = false) {
+  const prevFx = _fxSafeMap;
+  _fxSafeMap = !!inSafe;
   sfx('emp', x, y);
   spawnDecal('scorch', x, y, g.radius * 0.3, '#0b2030', 0.45, 0);
   spawnParticle('wave', x, y, 0, 0, 0.48, 0.48, g.radius * 1.15, '#5ee7ff', 0);
@@ -976,14 +979,31 @@ function detonateEMP(x, y, g, source) {
     spawnParticle('spark', x, y, Math.cos(a) * sp, Math.sin(a) * sp,
       rand(0.25, 0.5), 0.5, rand(1.5, 3), '#5ee7ff', 3);
   }
-  if (player && player.alive) {
+  if (player && player.alive && !!player.inSafeZone === !!inSafe) {
     const pd = distance(x, y, player.x, player.y);
     if (pd < 600) game.shake = Math.max(game.shake, (1 - pd / 600) * 6);
   }
   const r2 = g.radius * g.radius;
+  if (inSafe) {
+    for (let i = 0; i < safeZoneDummies.length; i++) {
+      const dm = safeZoneDummies[i];
+      if (!dm.alive) continue;
+      const d2 = (dm.x - x) * (dm.x - x) + (dm.y - y) * (dm.y - y);
+      if (d2 > r2) continue;
+      if (dm.armor > 0) {
+        const shred = Math.min(dm.armor, g.shieldShred);
+        dm.armor -= shred;
+        if (source === player) spawnText(dm.x, dm.y - 34, '-' + Math.round(shred) + ' ARM', '#5ee7ff', 13, 0.9);
+      }
+      damageDummy(dm, g.maxDmg, source, {});
+      if (source === player) spawnText(dm.x, dm.y - 48, 'JAMMED', '#7ef2ff', 11, 0.9);
+    }
+    _fxSafeMap = prevFx;
+    return;
+  }
   const empTargets = allEntities().slice();
   for (const e of empTargets) {
-    if (!e.alive || e === source) continue;
+    if (!e.alive || e === source || e.inSafeZone) continue;
     const d2 = (e.x - x) * (e.x - x) + (e.y - y) * (e.y - y);
     if (d2 > r2) continue;
     if (e.armor > 0) {
@@ -996,27 +1016,31 @@ function detonateEMP(x, y, g, source) {
     damage(e, g.maxDmg, source, { weapon: 'EMP', dist: Math.sqrt(d2), blast: true });
     if (source === player) spawnText(e.x, e.y - 48, 'JAMMED', '#7ef2ff', 11, 0.9);
   }
+  _fxSafeMap = prevFx;
 }
 
 function updateProjectiles(dt) {
+  const prevFx = _fxSafeMap;
   for (let i = projectiles.length - 1; i >= 0; i--) {
     const pr = projectiles[i];
+    const inSafe = !!pr.inSafeZone;
+    _fxSafeMap = inSafe;
     pr.fuse -= dt;
     pr.spin += dt * 9;
 
-    // Move + bounce off obstacles & Safe Zone shield barrier.
+    // Move + bounce off current map walls & obstacles.
     const nx = pr.x + pr.vx * dt;
     const ny = pr.y + pr.vy * dt;
-    const prInSafe = isPracticeMode() && inSafeZoneRect(pr.x, pr.y, 0);
-    const hitSafeX = isPracticeMode() && (inSafeZoneRect(nx, pr.y, prInSafe ? -7 : 7) !== prInSafe);
-    const hitSafeY = isPracticeMode() && (inSafeZoneRect(pr.x, ny, prInSafe ? -7 : 7) !== prInSafe);
-    if (hitSafeX || pointInObstacle(nx, pr.y, 7) || nx < 45 || nx > WORLD - 45) {
+    const maxW = inSafe ? SAFE_MAP_W : WORLD;
+    const maxH = inSafe ? SAFE_MAP_H : WORLD;
+    const wallPad = inSafe ? 40 : 45;
+    if ((!inSafe && pointInObstacle(nx, pr.y, 7)) || nx < wallPad || nx > maxW - wallPad) {
       pr.vx *= -0.58;
       sfx('bounce', pr.x, pr.y);
     } else {
       pr.x = nx;
     }
-    if (hitSafeY || pointInObstacle(pr.x, ny, 7) || ny < 45 || ny > WORLD - 45) {
+    if ((!inSafe && pointInObstacle(pr.x, ny, 7)) || ny < wallPad || ny > maxH - wallPad) {
       pr.vy *= -0.58;
       sfx('bounce', pr.x, pr.y);
     } else {
@@ -1047,13 +1071,13 @@ function updateProjectiles(dt) {
     if (pr.fuse <= 0) {
       const g = GADGETS[pr.kind] || GADGETS.frag;
       if (pr.kind === 'frag') {
-        explodeArea(pr.x, pr.y, g.radius, g.maxDmg, pr.owner, 'FRAG');
+        explodeArea(pr.x, pr.y, g.radius, g.maxDmg, pr.owner, 'FRAG', { inSafeZone: inSafe });
       } else if (pr.kind === 'emp') {
-        detonateEMP(pr.x, pr.y, g, pr.owner);
+        detonateEMP(pr.x, pr.y, g, pr.owner, inSafe);
       } else if (pr.kind === 'smoke') {
         sfx('smoke', pr.x, pr.y);
         smokes.push({
-          x: pr.x, y: pr.y, r: g.radius,
+          x: pr.x, y: pr.y, r: g.radius, inSafeZone: inSafe,
           life: g.duration, maxLife: g.duration, seed: rand(0, TAU),
         });
         spawnParticle('shock', pr.x, pr.y, 0, 0, 0.35, 0.35, g.radius * 0.7, '#cfe3ea', 0);
@@ -1062,6 +1086,7 @@ function updateProjectiles(dt) {
       if (i < projectiles.length) projectiles[i] = last;
     }
   }
+  _fxSafeMap = prevFx;
 }
 
 function updateSmokes(dt) {
@@ -1079,6 +1104,8 @@ function updateSmokes(dt) {
    --------------------------------------------------------- */
 function damageObstacle(o, dmg, source) {
   if (!o || !o.destructible || o.destroyed) return;
+  const prevFx = _fxSafeMap;
+  _fxSafeMap = false;
   o.hp -= dmg;
   o.hitFlash = 0.14;
   o.shakeT = 0.22;
@@ -1100,7 +1127,16 @@ function damageObstacle(o, dmg, source) {
     spawnParticle('dust', cx, cy, 0, 0, 0.45, 0.45, 22, '#9a8262', 2);
     if (Math.random() < 0.68) {
       const roll = Math.random();
-      if (roll < 0.28) {
+      if (isPracticeMode()) {
+        // Practice mode: crates drop utility only (never floor weapons).
+        if (roll < 0.42) {
+          pickups.push({ kind: 'health', x: cx, y: cy, phase: rand(0, TAU), dropLock: 0.15, spawnT: 0.35 });
+        } else if (roll < 0.76) {
+          pickups.push({ kind: 'armor', x: cx, y: cy, phase: rand(0, TAU), dropLock: 0.15, spawnT: 0.35 });
+        } else {
+          pickups.push({ kind: 'gadget', gadget: pick(['frag', 'emp', 'smoke']), x: cx, y: cy, phase: rand(0, TAU), dropLock: 0.15, spawnT: 0.35 });
+        }
+      } else if (roll < 0.28) {
         pickups.push({ kind: 'health', x: cx, y: cy, phase: rand(0, TAU), dropLock: 0.15, spawnT: 0.35 });
       } else if (roll < 0.54) {
         pickups.push({ kind: 'armor', x: cx, y: cy, phase: rand(0, TAU), dropLock: 0.15, spawnT: 0.35 });
@@ -1122,6 +1158,7 @@ function damageObstacle(o, dmg, source) {
       }
     }
   }
+  _fxSafeMap = prevFx;
 }
 
 function damageBarrel(bar, dmg, source) {
@@ -1139,6 +1176,8 @@ function damageBarrel(bar, dmg, source) {
 }
 
 function updateBarrels(dt) {
+  const prevFx = _fxSafeMap;
+  _fxSafeMap = false;
   for (let i = 0; i < barrels.length; i++) {
     const bar = barrels[i];
     if (!bar.alive) continue;
@@ -1153,7 +1192,7 @@ function updateBarrels(dt) {
       }
       if (bar.burnT <= 0) {
         bar.alive = false;
-        explodeArea(bar.x, bar.y, 168, 115, bar.chainSource || null, 'BARREL');
+        explodeArea(bar.x, bar.y, 168, 115, bar.chainSource || null, 'BARREL', { inSafeZone: false });
       }
     }
   }
@@ -1161,13 +1200,16 @@ function updateBarrels(dt) {
     if (obstacles[i].hitFlash > 0) obstacles[i].hitFlash = Math.max(0, obstacles[i].hitFlash - dt);
     if (obstacles[i].shakeT > 0) obstacles[i].shakeT = Math.max(0, obstacles[i].shakeT - dt);
   }
+  _fxSafeMap = prevFx;
 }
 
 function updateBoostPads(dt) {
+  const prevFx = _fxSafeMap;
+  _fxSafeMap = false;
   for (let i = 0; i < boostPads.length; i++) {
     const pad = boostPads[i];
     for (const e of allEntities()) {
-      if (!e.alive || e.boostPadCd > 0) continue;
+      if (!e.alive || e.inSafeZone || e.boostPadCd > 0) continue;
       const dx = e.x - pad.x;
       const dy = e.y - pad.y;
       const reach = pad.r + e.r * 0.45;
@@ -1187,6 +1229,7 @@ function updateBoostPads(dt) {
       }
     }
   }
+  _fxSafeMap = prevFx;
 }
 
 /* ---------------------------------------------------------
@@ -1225,6 +1268,8 @@ function tryDash() {
   game.shake = Math.max(game.shake, 2.2);
   game.zoomPunch = Math.max(game.zoomPunch || 0, 0.012);
   sfx('dash');
+  const prevFx = _fxSafeMap;
+  _fxSafeMap = !!p.inSafeZone;
   const trail = typeof getEquippedTrail === 'function' ? getEquippedTrail() : null;
   const dashColor = trail && trail.name !== 'NONE' ? trail.color : p.auraColor;
   spawnParticle('shock', p.x, p.y, 0, 0, 0.3, 0.3, 58, dashColor, 0);
@@ -1235,18 +1280,21 @@ function tryDash() {
       rand(0.18, 0.32), 0.32, rand(12, 21), dashColor, 4,
       Math.atan2(p.dashY, p.dashX));
   }
+  _fxSafeMap = prevFx;
 }
 
 function updatePlayer(dt) {
   const p = player;
   if (!p) return;
+  const prevFx = _fxSafeMap;
+  _fxSafeMap = !!p.inSafeZone;
   p.triggerHeld = !!(p.alive && mouse.down && game.state === 'playing' && !p.reloading && p.jamT <= 0 && p.mag > 0);
   updateWeapon(p, dt);
   if (p.streakT > 0) {
     p.streakT = Math.max(0, p.streakT - dt);
     if (p.streakT <= 0) p.killStreak = 0;
   }
-  if (!p.alive) return;
+  if (!p.alive) { _fxSafeMap = prevFx; return; }
 
   if (touchState && touchState.aimActive) {
     if (touchState.aimManual) {
@@ -1254,14 +1302,15 @@ function updatePlayer(dt) {
     } else {
       let nearest = null;
       let nearestD2 = 760 * 760;
-      for (const bot of bots) {
-        if (!bot.alive) continue;
-        const dx = bot.x - p.x;
-        const dy = bot.y - p.y;
+      const aimPool = p.inSafeZone ? safeZoneDummies : bots;
+      for (const target of aimPool) {
+        if (!target.alive) continue;
+        const dx = target.x - p.x;
+        const dy = target.y - p.y;
         const d2 = dx * dx + dy * dy;
-        if (d2 < nearestD2 && hasLOS(p.x, p.y, bot.x, bot.y)) {
+        if (d2 < nearestD2 && (p.inSafeZone || hasLOS(p.x, p.y, target.x, target.y))) {
           nearestD2 = d2;
-          nearest = bot;
+          nearest = target;
         }
       }
       if (nearest) p.angle = Math.atan2(nearest.y - p.y, nearest.x - p.x);
@@ -1381,6 +1430,7 @@ function updatePlayer(dt) {
   updateAuraMotes(p, dt);
 
   if (mouse.down && game.state === 'playing') tryFire(p, p.angle);
+  _fxSafeMap = prevFx;
 }
 
 /* ---------------------------------------------------------
@@ -1440,8 +1490,7 @@ function findBotLoot(b) {
     const d2 = dx * dx + dy * dy;
     if (!p.supply && d2 > maxR2) continue;
     if (p.supply && d2 > 680 * 680) continue;
-    // Don't wander outside the safe circle or into the Practice Safe Zone for loot.
-    if (isPracticeMode() && inSafeZoneRect(p.x, p.y, 24)) continue;
+    // Don't wander outside the safe circle for loot.
     if (zone && (p.x - zone.x) * (p.x - zone.x) + (p.y - zone.y) * (p.y - zone.y) > zone.r * zone.r) continue;
     let useful = false;
     let prio = 1;
@@ -1582,6 +1631,8 @@ const _steerBuf = [];
 
 function updateBot(b, dt) {
   if (!b.alive) return;
+  const prevFx = _fxSafeMap;
+  _fxSafeMap = false;
   updateWeapon(b, dt);
   updateAuraMotes(b, dt);
   if (b._losT > 0) b._losT -= dt;
@@ -1700,24 +1751,9 @@ function updateBot(b, dt) {
     dy += (oy / od) * f * 1.6;
   }
 
-  // Steer bots gently away from the Practice Safe Zone perimeter.
-  if (isPracticeMode()) {
-    const cx = clamp(b.x, SAFE_ZONE.x, SAFE_ZONE.x + SAFE_ZONE.w);
-    const cy = clamp(b.y, SAFE_ZONE.y, SAFE_ZONE.y + SAFE_ZONE.h);
-    const sx = b.x - cx;
-    const sy = b.y - cy;
-    const sd2 = sx * sx + sy * sy;
-    if (sd2 < steerNear2 && sd2 > 0.0001) {
-      const sd = Math.sqrt(sd2);
-      const f = (steerNear - sd) / steerNear;
-      dx += (sx / sd) * f * 2.2;
-      dy += (sy / sd) * f * 2.2;
-    }
-  }
-
   // Separation from other operators
   for (const o of allEntities()) {
-    if (o === b || !o.alive) continue;
+    if (o === b || !o.alive || o.inSafeZone) continue;
     const ox = b.x - o.x;
     const oy = b.y - o.y;
     const sd2 = ox * ox + oy * oy;
@@ -1810,14 +1846,18 @@ function updateBot(b, dt) {
     const turn = 5 * dt;
     b.angle += clamp(angleDiff(b.angle, moveAngle), -turn, turn);
   }
+  _fxSafeMap = prevFx;
 }
 
 /* ---------------------------------------------------------
    Bullets (Grid Collision, Barrels, Crates, Pierce, Crits)
    --------------------------------------------------------- */
 function updateBullets(dt) {
+  const prevFx = _fxSafeMap;
   for (let i = bullets.length - 1; i >= 0; i--) {
     const b = bullets[i];
+    const inSafe = !!b.inSafeZone;
+    _fxSafeMap = inSafe;
     let speed = Math.hypot(b.vx, b.vy) || 1;
     const ux = b.vx / speed;
     const uy = b.vy / speed;
@@ -1850,22 +1890,20 @@ function updateBullets(dt) {
       const nx = b.x + ux * stepLen;
       const ny = b.y + uy * stepLen;
 
-      // 0. Safe Zone shield barrier isolation (blocks shots crossing in or out)
-      if (isPracticeMode() && inSafeZoneRect(nx, ny, 0) !== b.inSafeZone) {
-        if (b.explosive) {
-          explodeArea(b.x, b.y, b.splashRadius, b.splashDmg, b.owner, b.weapon, {
-            selfDmgMul: b.selfDmgMul, crateDmgMul: b.crateDmgMul,
-            knockback: b.knockback, dist: b.travelled,
-          });
-        } else {
-          spawnHitSparks(b.x, b.y, '#5ee7ff');
+      // Dedicated Safe Zone Map bullet simulation (100% isolated from Combat Map)
+      if (inSafe) {
+        if (nx < 34 || nx > SAFE_MAP_W - 34 || ny < 34 || ny > SAFE_MAP_H - 34) {
+          if (b.explosive) {
+            explodeArea(b.x, b.y, b.splashRadius, b.splashDmg, b.owner, b.weapon, {
+              inSafeZone: true, selfDmgMul: 0, crateDmgMul: b.crateDmgMul,
+              knockback: 0, dist: b.travelled,
+            });
+          } else {
+            spawnHitSparks(b.x, b.y, '#5ee7ff');
+          }
+          done = true;
+          break;
         }
-        done = true;
-        break;
-      }
-
-      // 0b. Safe Zone firing-range target dummies
-      if (b.inSafeZone && safeZoneDummies.length) {
         let hitDummy = null;
         for (let k = 0; k < safeZoneDummies.length; k++) {
           const dm = safeZoneDummies[k];
@@ -1881,7 +1919,7 @@ function updateBullets(dt) {
           if (b.explosive) {
             b.x = nx; b.y = ny;
             explodeArea(nx, ny, b.splashRadius, b.splashDmg, b.owner, b.weapon, {
-              directTarget: hitDummy, directDmg: b.dmg,
+              inSafeZone: true, directTarget: hitDummy, directDmg: b.dmg,
               selfDmgMul: 0, crateDmgMul: b.crateDmgMul, knockback: 0,
             });
             done = true;
@@ -1906,17 +1944,45 @@ function updateBullets(dt) {
             break;
           }
         }
+        b.x = nx;
+        b.y = ny;
+        b.travelled += stepLen;
+        if (b.travelled >= b.maxDist) {
+          if (b.explosive) {
+            explodeArea(b.x, b.y, b.splashRadius, b.splashDmg, b.owner, b.weapon, {
+              inSafeZone: true, selfDmgMul: 0, crateDmgMul: b.crateDmgMul,
+              knockback: 0, dist: b.travelled,
+            });
+          }
+          done = true;
+          break;
+        }
+        continue;
       }
 
-      // 1. Check entity hits
+      // 0. Combat Map world bounds
+      if (nx < 16 || nx > WORLD - 16 || ny < 16 || ny > WORLD - 16) {
+        if (b.explosive) {
+          explodeArea(b.x, b.y, b.splashRadius, b.splashDmg, b.owner, b.weapon, {
+            inSafeZone: false, selfDmgMul: b.selfDmgMul, crateDmgMul: b.crateDmgMul,
+            knockback: b.knockback, dist: b.travelled,
+          });
+        } else {
+          spawnHitSparks(b.x, b.y, '#b7c7cf');
+        }
+        done = true;
+        break;
+      }
+
+      // 1. Check combat entity hits
       let hit = null;
-      if (!b.inSafeZone && player && player.alive && !player.inSafeZone && player !== b.owner && player.id !== b.hitId &&
+      if (player && player.alive && !player.inSafeZone && player !== b.owner && player.id !== b.hitId &&
           Math.abs(player.x - b.x) <= player.r + stepLen + 2 &&
           Math.abs(player.y - b.y) <= player.r + stepLen + 2 &&
           segCircle(b.x, b.y, nx, ny, player.x, player.y, player.r)) {
         hit = player;
       }
-      if (!hit && !b.inSafeZone) {
+      if (!hit) {
         for (let k = 0; k < bots.length; k++) {
           const bot = bots[k];
           if (!bot.alive || bot === b.owner || bot.id === b.hitId) continue;
@@ -1933,6 +1999,7 @@ function updateBullets(dt) {
           b.x = nx;
           b.y = ny;
           explodeArea(nx, ny, b.splashRadius, b.splashDmg, b.owner, b.weapon, {
+            inSafeZone: false,
             directTarget: hit,
             directDmg: b.dmg,
             selfDmgMul: b.selfDmgMul,
@@ -1988,6 +2055,7 @@ function updateBullets(dt) {
           b.y = ny;
           if (b.explosive) {
             explodeArea(nx, ny, b.splashRadius, b.splashDmg, b.owner, b.weapon, {
+              inSafeZone: false,
               selfDmgMul: b.selfDmgMul,
               crateDmgMul: b.crateDmgMul,
               knockback: b.knockback,
@@ -2013,6 +2081,7 @@ function updateBullets(dt) {
       if (obs) {
         if (b.explosive) {
           explodeArea(b.x, b.y, b.splashRadius, b.splashDmg, b.owner, b.weapon, {
+            inSafeZone: false,
             selfDmgMul: b.selfDmgMul,
             crateDmgMul: b.crateDmgMul,
             knockback: b.knockback,
@@ -2037,6 +2106,7 @@ function updateBullets(dt) {
       if (b.travelled >= b.maxDist) {
         if (b.explosive) {
           explodeArea(b.x, b.y, b.splashRadius, b.splashDmg, b.owner, b.weapon, {
+            inSafeZone: false,
             selfDmgMul: b.selfDmgMul,
             crateDmgMul: b.crateDmgMul,
             knockback: b.knockback,
@@ -2059,6 +2129,7 @@ function updateBullets(dt) {
       if (i < bullets.length) bullets[i] = last;
     }
   }
+  _fxSafeMap = prevFx;
 }
 
 /* ---------------------------------------------------------
@@ -2067,13 +2138,16 @@ function updateBullets(dt) {
 function damage(target, amount, source, opts = {}) {
   if (!target.alive || game.state !== 'playing') return;
   if (target.inSafeZone) return;
+  const prevFx = _fxSafeMap;
+  _fxSafeMap = false;
   // Once victory is secured, prevent post-win slow-mo storm/blast from overturning Victory!
-  if (game.pendingEnd && game.pendingEnd.win && target === player) return;
+  if (game.pendingEnd && game.pendingEnd.win && target === player) { _fxSafeMap = prevFx; return; }
   if (target === player && game.invuln > 0 && !opts.trueDamage) {
     if (!opts.silent) {
       spawnParticle('shard', target.x, target.y, rand(-90, 90), rand(-90, 90),
         0.24, 0.24, 5, target.auraColor, 4);
     }
+    _fxSafeMap = prevFx;
     return;
   }
   if (target === player) game.regenDelay = target.regenDelayBase || 5.5;
@@ -2152,6 +2226,7 @@ function damage(target, amount, source, opts = {}) {
   if (target.hp <= 0) {
     killEntity(target, source, !!opts.storm, { weapon: opts.weapon, dist: opts.dist, blast: !!opts.blast });
   }
+  _fxSafeMap = prevFx;
 }
 
 function killEntity(e, source, byStorm, info = {}) {
@@ -2226,7 +2301,7 @@ function killEntity(e, source, byStorm, info = {}) {
     game.pendingEnd = { t: 1.25, win: false };
   }
 
-  if (typeof addFeed === 'function') {
+  if (typeof addFeed === 'function' && !isPlayerInSafeMap()) {
     if (byStorm || !source) addFeed('THE STORM', e.name, true, false, null, false, false);
     else addFeed(source.name, e.name, false, source === player, info.weapon || source.weapon, !!info.blast, source === e);
   }
@@ -2239,6 +2314,7 @@ function killEntity(e, source, byStorm, info = {}) {
 }
 
 function dropLoot(e) {
+  const practice = isPracticeMode();
   const drop = (extra) => {
     let x = e.x;
     let y = e.y;
@@ -2251,26 +2327,29 @@ function dropLoot(e) {
       kind: extra.kind, weapon: extra.weapon, skin: extra.skin, gadget: extra.gadget,
       x, y, phase: rand(0, TAU), dropLock: 0.25, spawnT: 0.36,
     });
-    // Keep Practice floor pickups bounded during endless sessions.
-    if (isPracticeMode() && pickups.length > 145) {
+    // Keep Practice floor utility pickups bounded during endless sessions.
+    if (practice && pickups.length > 96) {
       const idxOld = pickups.findIndex((p) => !p.supply);
       if (idxOld !== -1) pickups.splice(idxOld, 1);
     }
   };
-  if (Math.random() < 0.5) {
-    drop({ kind: 'weapon', weapon: e.weapon, skin: e.skin });
-  } else {
-    const dropPool = e.elite
-      ? ['rifle', 'pulse', 'dmr', 'lmg', 'lmg', 'sniper', 'sniper', 'minigun', 'bazooka', 'railgun']
-      : ['smg', 'shotgun', 'revolver', 'rifle', 'pulse', 'dmr', 'lmg', 'lmg', 'sniper', 'sniper', 'bazooka', 'minigun'];
-    drop({
-      kind: 'weapon',
-      weapon: pick(dropPool),
-      skin: randomSkin(e.elite ? 1.8 : 0.45),
-    });
+  // Practice mode: NEVER drop weapons on the map (only health, armor & gadgets).
+  if (!practice) {
+    if (Math.random() < 0.5) {
+      drop({ kind: 'weapon', weapon: e.weapon, skin: e.skin });
+    } else {
+      const dropPool = e.elite
+        ? ['rifle', 'pulse', 'dmr', 'lmg', 'lmg', 'sniper', 'sniper', 'minigun', 'bazooka', 'railgun']
+        : ['smg', 'shotgun', 'revolver', 'rifle', 'pulse', 'dmr', 'lmg', 'lmg', 'sniper', 'sniper', 'bazooka', 'minigun'];
+      drop({
+        kind: 'weapon',
+        weapon: pick(dropPool),
+        skin: randomSkin(e.elite ? 1.8 : 0.45),
+      });
+    }
   }
-  if (Math.random() < 0.42) drop({ kind: 'health' });
-  if (Math.random() < 0.34) drop({ kind: 'armor' });
+  if (Math.random() < (practice ? 0.52 : 0.42)) drop({ kind: 'health' });
+  if (Math.random() < (practice ? 0.44 : 0.34)) drop({ kind: 'armor' });
   if (Math.random() < (e.elite ? 0.65 : 0.28)) {
     drop({ kind: 'gadget', gadget: pick(['frag', 'emp', 'smoke']) });
   }
@@ -2342,8 +2421,8 @@ function interactPickup() {
     equipWeaponToEntity(p, target, p.activeSlot);
     pickupBurst(target);
     pickups.splice(idx, 1);
-    // Drop previous weapon cleanly onto an unobstructed spot with brief dropLock.
-    if (oldSlot) {
+    // Drop previous weapon cleanly onto an unobstructed spot with brief dropLock (never in Practice mode).
+    if (oldSlot && !isPracticeMode()) {
       let dx = p.x;
       let dy = p.y;
       for (let t = 0; t < 10; t++) {
@@ -2388,6 +2467,8 @@ function interactPickup() {
 }
 
 function updatePickups(dt) {
+  const prevFx = _fxSafeMap;
+  _fxSafeMap = false;
   let closestPrompt = null;
   let closestD2 = 54 * 54;
 
@@ -2398,7 +2479,7 @@ function updatePickups(dt) {
     let consumed = false;
 
     for (const e of allEntities()) {
-      if (!e.alive) continue;
+      if (!e.alive || e.inSafeZone) continue;
       if (e.isPlayer && p.dropLock > 0) continue;
       const dx = e.x - p.x;
       const dy = e.y - p.y;
@@ -2425,7 +2506,8 @@ function updatePickups(dt) {
     }
     if (consumed && p === closestPrompt) closestPrompt = null;
   }
-  game.nearPickup = closestPrompt;
+  game.nearPickup = isPlayerInSafeMap() ? null : closestPrompt;
+  _fxSafeMap = prevFx;
 }
 
 function applyAutoPickup(e, p) {
@@ -2532,9 +2614,50 @@ function addStarterLoot() {
    Practice Mode — Safe Zone Arsenal, Dummies, Teleport & Instant Respawn
    --------------------------------------------------------- */
 const SKIN_ORDER = ['factory', 'neon', 'gold', 'inferno', 'void'];
+let safeZoneTargetSlot = -1; // -1 = auto, 0 = slot 1, 1 = slot 2
+
+function clearSafeZoneTransientFx() {
+  for (let i = bullets.length - 1; i >= 0; i--) {
+    if (bullets[i].inSafeZone) {
+      releaseBullet(bullets[i]);
+      const last = bullets.pop();
+      if (i < bullets.length) bullets[i] = last;
+    }
+  }
+  for (let i = projectiles.length - 1; i >= 0; i--) {
+    if (projectiles[i].inSafeZone) {
+      const last = projectiles.pop();
+      if (i < projectiles.length) projectiles[i] = last;
+    }
+  }
+  for (let i = smokes.length - 1; i >= 0; i--) {
+    if (smokes[i].inSafeZone) {
+      const last = smokes.pop();
+      if (i < smokes.length) smokes[i] = last;
+    }
+  }
+}
+
+function snapCameraToPlayer() {
+  if (!player) return;
+  const inSafe = isPlayerInSafeMap();
+  cam.zoom = inSafe && typeof getSafeMapZoom === 'function' ? getSafeMapZoom() : (cam.baseZoom || 1);
+  const viewW = W / (cam.zoom || 1);
+  const viewH = H / (cam.zoom || 1);
+  const mapW = inSafe ? SAFE_MAP_W : WORLD;
+  const mapH = inSafe ? SAFE_MAP_H : WORLD;
+  cam.leadX = 0;
+  cam.leadY = 0;
+  cam.kickX = 0;
+  cam.kickY = 0;
+  cam.x = viewW >= mapW ? mapW / 2 : clamp(player.x, viewW / 2, mapW - viewW / 2);
+  cam.y = viewH >= mapH ? mapH / 2 : clamp(player.y, viewH / 2, mapH - viewH / 2);
+}
 
 function damageDummy(dm, amount, source, opts = {}) {
   if (!dm || !dm.alive) return;
+  const prevFx = _fxSafeMap;
+  _fxSafeMap = true;
   let dmg = amount;
   let absorbed = 0;
   const hadArmor = dm.armor > 0;
@@ -2578,6 +2701,7 @@ function damageDummy(dm, amount, source, opts = {}) {
     spawnParticle('shock', dm.x, dm.y, 0, 0, 0.38, 0.38, 64, '#5ee7ff', 0);
     spawnText(dm.x, dm.y - dm.r - 18, 'RESETTING', '#5ee7ff', 11, 0.85);
   }
+  _fxSafeMap = prevFx;
 }
 
 function combatSpawnPosition(avoidPlayerDist = 0) {
@@ -2596,8 +2720,13 @@ function selectSafeZoneWeapon(weaponKey, skinKey = null, targetSlot = -1) {
   if (!p || !p.alive || !isPracticeMode() || !p.inSafeZone) return false;
   const w = WEAPONS[weaponKey];
   if (!w) return false;
+  const prevFx = _fxSafeMap;
+  _fxSafeMap = true;
   syncSlotFromEntity(p);
   let slotIdx = targetSlot;
+  if (slotIdx !== 0 && slotIdx !== 1 && (safeZoneTargetSlot === 0 || safeZoneTargetSlot === 1)) {
+    slotIdx = safeZoneTargetSlot;
+  }
   if (slotIdx !== 0 && slotIdx !== 1) {
     if (!p.slots[1] && !(p.activeSlot === 0 && p.weapon === 'pistol' && p.skin === 'factory')) {
       slotIdx = 1;
@@ -2620,14 +2749,17 @@ function selectSafeZoneWeapon(weaponKey, skinKey = null, targetSlot = -1) {
   p.weaponChangeT = 0.24;
   sfx('pickup');
   spawnParticle('shock', p.x, p.y, 0, 0, 0.26, 0.26, 44, w.color, 0);
-  showToast('EQUIPPED ' + w.name + ' (SLOT ' + (slotIdx + 1) + ')', 1100);
+  showToast('EQUIPPED ' + w.name + ' · SLOT ' + (slotIdx + 1), 1100);
   if (typeof syncSafeZonePanelUI === 'function') syncSafeZonePanelUI();
+  _fxSafeMap = prevFx;
   return true;
 }
 
 function selectSafeZoneSkin(skinKey) {
   const p = player;
   if (!p || !p.alive || !isPracticeMode() || !p.inSafeZone || !SKINS[skinKey]) return false;
+  const prevFx = _fxSafeMap;
+  _fxSafeMap = true;
   p.skin = skinKey;
   syncSlotFromEntity(p);
   const sk = skinInfo(skinKey);
@@ -2635,6 +2767,7 @@ function selectSafeZoneSkin(skinKey) {
   spawnParticle('shock', p.x, p.y, 0, 0, 0.28, 0.28, 48, sk.color, 0);
   showToast(sk.name + ' FINISH' + (sk.bonus > 0 ? ' +' + Math.round(sk.bonus * 100) + '%' : ''), 1100, sk.bonus >= 0.12 ? 'gold' : '');
   if (typeof syncSafeZonePanelUI === 'function') syncSafeZonePanelUI();
+  _fxSafeMap = prevFx;
   return true;
 }
 
@@ -2651,20 +2784,24 @@ function selectSafeZoneGadget(gadgetId) {
   if (!p || !p.alive || !isPracticeMode() || !p.inSafeZone) return false;
   const g = GADGETS[gadgetId];
   if (!g) return false;
+  const prevFx = _fxSafeMap;
+  _fxSafeMap = true;
   p.gadget = g.id;
   p.gadgetCharges = g.maxCharges;
   sfx('pickup');
   spawnParticle('shock', p.x, p.y, 0, 0, 0.26, 0.26, 42, g.color, 0);
   showToast(g.name + ' ×' + g.maxCharges, 1000);
   if (typeof syncSafeZonePanelUI === 'function') syncSafeZonePanelUI();
+  _fxSafeMap = prevFx;
   return true;
 }
 
 function teleportToCombat() {
   const p = player;
   if (!p || !p.alive || !isPracticeMode() || game.state !== 'playing') return false;
+  const prevFx = _fxSafeMap;
+  clearSafeZoneTransientFx();
   const pos = combatSpawnPosition(0);
-  spawnParticle('wave', p.x, p.y, 0, 0, 0.45, 0.45, 72, '#5ee7ff', 0);
   p.inSafeZone = false;
   p.x = pos.x;
   p.y = pos.y;
@@ -2685,25 +2822,30 @@ function teleportToCombat() {
   p.gadgetCharges = Math.max(p.gadgetCharges, Math.min(g.maxCharges, 2));
   game.invuln = 1.25;
   game.nearStation = null;
+  game.hurt = 0;
+  game.damageIndicator = 0;
   p.spawnT = 0.35;
-  cam.x = p.x;
-  cam.y = p.y;
+  if (typeof setSafeZonePanelOpen === 'function') setSafeZonePanelOpen(false);
+  snapCameraToPlayer();
+  _fxSafeMap = false;
   sfx('boost');
   spawnParticle('wave', p.x, p.y, 0, 0, 0.65, 0.65, 110, '#5ee7ff', 0);
   spawnParticle('shock', p.x, p.y, 0, 0, 0.42, 0.42, 82, '#ffd166', 0);
-  showToast('COMBAT ARENA · PRESS H FOR SAFE ZONE', 1800, 'gold');
+  showToast('COMBAT ARENA · PRESS H FOR SAFE ZONE', 1600, 'gold');
   if (typeof syncSafeZonePanelUI === 'function') syncSafeZonePanelUI();
+  _fxSafeMap = prevFx;
   return true;
 }
 
 function returnToSafeZone() {
   const p = player;
   if (!p || !p.alive || !isPracticeMode() || game.state !== 'playing') return false;
-  spawnParticle('wave', p.x, p.y, 0, 0, 0.45, 0.45, 72, '#5ee7ff', 0);
+  const prevFx = _fxSafeMap;
+  clearSafeZoneTransientFx();
   p.inSafeZone = true;
   p.safePortalGrace = 0.9;
-  p.x = SAFE_ZONE.x + 310;
-  p.y = SAFE_ZONE.y + 545;
+  p.x = SAFE_ZONE_SPAWN.x;
+  p.y = SAFE_ZONE_SPAWN.y;
   p.vx = 0; p.vy = 0;
   p.boostVelX = 0; p.boostVelY = 0;
   p.dashT = 0;
@@ -2721,13 +2863,17 @@ function returnToSafeZone() {
   p.gadgetCharges = g.maxCharges;
   mouse.down = false;
   game.nearPickup = null;
+  game.hurt = 0;
+  game.damageIndicator = 0;
   p.spawnT = 0.32;
-  cam.x = p.x;
-  cam.y = p.y;
+  if (typeof setSafeZonePanelOpen === 'function') setSafeZonePanelOpen(false);
+  snapCameraToPlayer();
+  _fxSafeMap = true;
   sfx('boost');
   spawnParticle('wave', p.x, p.y, 0, 0, 0.55, 0.55, 96, '#5ee7ff', 0);
-  showToast('SAFE ZONE · SELECT WEAPONS', 1500);
+  showToast('SAFE ZONE · [E] PEDESTALS · [B] ARMORY · [T] COMBAT', 1800);
   if (typeof syncSafeZonePanelUI === 'function') syncSafeZonePanelUI();
+  _fxSafeMap = prevFx;
   return true;
 }
 
@@ -2779,12 +2925,17 @@ function respawnPracticeBot(b) {
   b.gadget = Math.random() < 0.7 ? 'frag' : 'emp';
   b.gadgetCharges = elite ? 1 : 0;
   b.spawnT = 0.35;
+  const prevFx = _fxSafeMap;
+  _fxSafeMap = false;
   spawnParticle('shock', b.x, b.y, 0, 0, 0.32, 0.32, 54, b.auraColor, 0);
+  _fxSafeMap = prevFx;
 }
 
 function respawnPracticePlayer() {
   const p = player;
   if (!p) return;
+  const prevFx = _fxSafeMap;
+  _fxSafeMap = false;
   const pos = combatSpawnPosition(0);
   p.alive = true;
   p.inSafeZone = false;
@@ -2806,17 +2957,20 @@ function respawnPracticePlayer() {
   syncEntityFromSlot(p);
   game.invuln = 1.3;
   game.hurt = 0;
+  game.damageIndicator = 0;
   game.shake = 5;
   p.spawnT = 0.36;
-  cam.x = p.x;
-  cam.y = p.y;
+  snapCameraToPlayer();
   sfx('boost');
   spawnParticle('wave', p.x, p.y, 0, 0, 0.6, 0.6, 105, '#5ee7ff', 0);
   showToast('RESPAWNED · PRESS H FOR SAFE ZONE', 1600, 'gold');
+  _fxSafeMap = prevFx;
 }
 
 function updateSafeZone(dt) {
   if (!isPracticeMode()) return;
+  const prevFx = _fxSafeMap;
+  _fxSafeMap = true;
   // Update firing-range target dummies
   for (let i = 0; i < safeZoneDummies.length; i++) {
     const dm = safeZoneDummies[i];
@@ -2840,6 +2994,7 @@ function updateSafeZone(dt) {
   const p = player;
   if (!p || !p.alive || !p.inSafeZone) {
     game.nearStation = null;
+    _fxSafeMap = prevFx;
     return;
   }
 
@@ -2851,9 +3006,9 @@ function updateSafeZone(dt) {
   p.slowT = 0;
   if (p.safePortalGrace > 0) p.safePortalGrace = Math.max(0, p.safePortalGrace - dt);
 
-  // Detect nearest interactive weapon/gadget/skin pedestal inside Safe Zone
+  // Detect nearest interactive weapon/gadget/skin pedestal inside Safe Zone Map
   let bestSt = null;
-  let bestD2 = 54 * 54;
+  let bestD2 = 58 * 58;
   for (let i = 0; i < safeZoneStations.length; i++) {
     const st = safeZoneStations[i];
     const dx = p.x - st.x;
@@ -2866,7 +3021,7 @@ function updateSafeZone(dt) {
   }
   game.nearStation = bestSt;
 
-  // Walk onto glowing Combat Teleport Portal to warp into the arena!
+  // Walk onto glowing Combat Teleport Portal to warp into the Combat Arena Map!
   if (p.safePortalGrace <= 0) {
     const pdx = p.x - SAFE_ZONE_PORTAL.x;
     const pdy = p.y - SAFE_ZONE_PORTAL.y;
@@ -2875,12 +3030,14 @@ function updateSafeZone(dt) {
       teleportToCombat();
     }
   }
+  _fxSafeMap = prevFx;
 }
 
 /* ---------------------------------------------------------
-   Zone / Storm & High-Tier Supply Drops
+   Zone / Storm & High-Tier Supply Drops (Royale Mode Only)
    --------------------------------------------------------- */
 function updateZone(dt) {
+  if (isPracticeMode()) return;
   const z = zone;
   if (!z) return;
   const speedMul = getGameMode().stormSpeed || 1;
@@ -2936,34 +3093,11 @@ function updateZone(dt) {
 }
 
 function updateSupplyDrop(dt) {
-  if (!game || game.state !== 'playing') return;
-
-  // In Practice mode, gently replenish floor weapons across the combat map if loot runs low.
-  if (isPracticeMode()) {
-    game.practiceLootT = (game.practiceLootT || 0) - dt;
-    if (game.practiceLootT <= 0) {
-      game.practiceLootT = 6;
-      let floorWeps = 0;
-      for (let i = 0; i < pickups.length; i++) {
-        if (pickups[i].kind === 'weapon') floorWeps++;
-      }
-      if (floorWeps < 50) {
-        const toAdd = Math.min(8, 60 - floorWeps);
-        for (let k = 0; k < toAdd; k++) {
-          const pos = spawnPosition(150);
-          pickups.push({
-            kind: 'weapon',
-            weapon: pick(FLOOR_WEAPON_POOL),
-            skin: randomSkin(0.5),
-            x: pos.x, y: pos.y, phase: rand(0, TAU), dropLock: 0, spawnT: 0.35,
-          });
-        }
-      }
-    }
-  }
-
+  if (!game || game.state !== 'playing' || isPracticeMode()) return;
   if (game.matchTime < game.supplyNext) return;
 
+  const prevFx = _fxSafeMap;
+  _fxSafeMap = false;
   let pos = null;
   for (let i = 0; i < 50; i++) {
     const candidate = zone
@@ -2972,8 +3106,7 @@ function updateSupplyDrop(dt) {
         y: clamp(rand(zone.y - zone.r * 0.72, zone.y + zone.r * 0.72), 150, WORLD - 150),
       }
       : spawnPosition(180);
-    if (!inSafeZoneRect(candidate.x, candidate.y, 140) &&
-        !pointInObstacle(candidate.x, candidate.y, 58) &&
+    if (!pointInObstacle(candidate.x, candidate.y, 58) &&
         pickups.every((p) => distance(candidate.x, candidate.y, p.x, p.y) > 90)) {
       pos = candidate;
       break;
@@ -2986,7 +3119,7 @@ function updateSupplyDrop(dt) {
     for (let i = 0; i < 40; i++) {
       const cx = clamp(pos.x + rand(-160, 160), 150, WORLD - 150);
       const cy = clamp(pos.y + rand(-160, 160), 150, WORLD - 150);
-      if (!inSafeZoneRect(cx, cy, 140) && !pointInObstacle(cx, cy, 58)) { pos = { x: cx, y: cy }; break; }
+      if (!pointInObstacle(cx, cy, 58)) { pos = { x: cx, y: cy }; break; }
     }
   }
 
@@ -3032,6 +3165,7 @@ function updateSupplyDrop(dt) {
       Math.sin(a) * rand(60, 220), rand(0.4, 0.9), 0.9, rand(1.5, 3), '#ffd166', 2);
   }
   spawnParticle('wave', pos.x, pos.y, 0, 0, 0.8, 0.8, 120, '#ffd166', 0);
+  _fxSafeMap = prevFx;
 }
 
 /* ---------------------------------------------------------
@@ -3063,6 +3197,7 @@ function spawnParticle(type, x, y, vx, vy, life, maxLife, size, color, drag = 2,
   particle.life = life; particle.maxLife = maxLife;
   particle.size = size; particle.color = color;
   particle.drag = drag; particle.angle = angle;
+  particle.safe = !!_fxSafeMap;
   return particle;
 }
 
@@ -3135,7 +3270,7 @@ function spawnDeathBurst(e) {
 
 function spawnText(x, y, text, color, size = 14, life = 0.85) {
   if (texts.length >= 44) texts.shift();
-  texts.push({ x, y, vy: size >= 18 ? -34 : -42, life, maxLife: life, text, color, size });
+  texts.push({ x, y, vy: size >= 18 ? -34 : -42, life, maxLife: life, text, color, size, safe: !!_fxSafeMap });
 }
 
 function grantAura(amount) {
@@ -3160,7 +3295,7 @@ function grantAura(amount) {
 }
 
 function addGunPing(x, y) {
-  if (!player) return;
+  if (!player || isPlayerInSafeMap()) return;
   if (distance(x, y, player.x, player.y) > (player.radarRange || 1300) + 400) return;
   pings.push({ x, y, life: 1.4, maxLife: 1.4 });
   if (pings.length > 14) pings.shift();
@@ -3182,15 +3317,19 @@ function updateFx(dt) {
     game.hitmarkerCrit = false;
   }
 
-  // Frame-rate-independent storm vignette pulse (consistent on 30/60/120/144Hz).
-  let outsideStorm = false;
-  if (player && player.alive && zone) {
-    const zdx = player.x - zone.x;
-    const zdy = player.y - zone.y;
-    outsideStorm = zdx * zdx + zdy * zdy > zone.r * zone.r;
+  // Frame-rate-independent storm vignette pulse (Royale mode only).
+  if (isPracticeMode()) {
+    game.stormPulse = 0;
+  } else {
+    let outsideStorm = false;
+    if (player && player.alive && zone) {
+      const zdx = player.x - zone.x;
+      const zdy = player.y - zone.y;
+      outsideStorm = zdx * zdx + zdy * zdy > zone.r * zone.r;
+    }
+    const targetStorm = outsideStorm ? 0.72 + Math.sin(game.time * 4.8) * 0.14 : 0;
+    game.stormPulse = damp(game.stormPulse || 0, targetStorm, 7, dt);
   }
-  const targetStorm = outsideStorm ? 0.72 + Math.sin(game.time * 4.8) * 0.14 : 0;
-  game.stormPulse = damp(game.stormPulse || 0, targetStorm, 7, dt);
 
   if (game.killBoostT > 0) {
     game.killBoostT = Math.max(0, game.killBoostT - dt);

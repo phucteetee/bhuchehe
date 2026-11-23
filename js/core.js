@@ -9,8 +9,12 @@ const TAU = Math.PI * 2;
 const WORLD = 4400;
 let TOTAL_PLAYERS = 30;
 let BOT_TOTAL = TOTAL_PLAYERS - 1;
-const SAFE_ZONE = { x: 140, y: 140, w: 980, h: 680 };
-const SAFE_ZONE_PORTAL = { x: SAFE_ZONE.x + 650, y: SAFE_ZONE.y + 555, r: 44 };
+const SAFE_MAP_W = 1400;
+const SAFE_MAP_H = 820;
+const SAFE_ZONE = { x: 0, y: 0, w: SAFE_MAP_W, h: SAFE_MAP_H };
+const SAFE_ZONE_SPAWN = { x: 430, y: 635 };
+const SAFE_ZONE_PORTAL = { x: 750, y: 645, r: 44 };
+let _fxSafeMap = false;
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -156,10 +160,10 @@ const GAME_MODES = {
   },
   practice: {
     id: 'practice', players: 20, stormSpeed: 0, lootLuck: 0.9,
-    eliteChance: 0.25, supplyFirst: 45, supplyGap: 65, auraMul: 0.25,
+    eliteChance: 0.25, supplyFirst: 0, supplyGap: 0, auraMul: 0.25,
     noStorm: true, practice: true,
     name: 'PRACTICE',
-    desc: '20 ops always · Free Safe Zone armory, no storm & instant respawn',
+    desc: '20 ops · Dedicated Safe Zone map, free armory, no floor guns & no storm',
   },
 };
 
@@ -213,10 +217,8 @@ function isPracticeMode() {
   return !!getGameMode().practice;
 }
 
-function inSafeZoneRect(x, y, pad = 0) {
-  return isPracticeMode() &&
-    x >= SAFE_ZONE.x - pad && x <= SAFE_ZONE.x + SAFE_ZONE.w + pad &&
-    y >= SAFE_ZONE.y - pad && y <= SAFE_ZONE.y + SAFE_ZONE.h + pad;
+function isPlayerInSafeMap() {
+  return !!(isPracticeMode() && player && player.inSafeZone);
 }
 
 function getPlayerPerk() {
@@ -339,11 +341,16 @@ const mctx = minimap.getContext('2d', { alpha: false });
 const UI = {
   fpsBadge: document.getElementById('fpsBadge'),
   alive: document.getElementById('aliveCount'),
+  alivePill: document.getElementById('alivePill'),
   kills: document.getElementById('killCount'),
   aura: document.getElementById('auraCount'),
   auraPill: document.getElementById('auraPill'),
   zone: document.getElementById('zoneText'),
+  zonePill: document.getElementById('zonePill'),
   supply: document.getElementById('supplyText'),
+  supplyPill: document.getElementById('supplyPill'),
+  safePill: document.getElementById('safePill'),
+  minimapWrap: document.getElementById('minimapWrap'),
   feed: document.getElementById('feed'),
   pickupPrompt: document.getElementById('pickupPrompt'),
   pickupTitle: document.getElementById('pickupTitle'),
@@ -382,7 +389,12 @@ const UI = {
   swapTouch: document.getElementById('swapTouch'),
   interactTouch: document.getElementById('interactTouch'),
   safeTouch: document.getElementById('safeTouch'),
+  armoryTouch: document.getElementById('armoryTouch'),
   practiceBar: document.getElementById('practiceBar'),
+  safeZoneControls: document.getElementById('safeZoneControls'),
+  toggleArmoryBtn: document.getElementById('toggleArmoryBtn'),
+  topDeployBtn: document.getElementById('topDeployBtn'),
+  closeSafeZoneBtn: document.getElementById('closeSafeZoneBtn'),
   returnSafeBtn: document.getElementById('returnSafeBtn'),
   safeZonePanel: document.getElementById('safeZonePanel'),
   safeZoneWeapons: document.getElementById('safeZoneWeapons'),
@@ -780,13 +792,6 @@ function segRect(x1, y1, x2, y2, rect, pad = 0) {
 }
 
 function hasLOS(x1, y1, x2, y2) {
-  // Safe Zone shield barrier blocks sightlines between sanctuary and combat arena.
-  if (isPracticeMode()) {
-    const in1 = inSafeZoneRect(x1, y1, 0);
-    const in2 = inSafeZoneRect(x2, y2, 0);
-    if (in1 !== in2) return false;
-    if (!in1 && segRect(x1, y1, x2, y2, SAFE_ZONE, 2)) return false;
-  }
   // Fast grid-accelerated ray walk using bounding cells along the segment.
   const dx = x2 - x1;
   const dy = y2 - y1;
@@ -1239,6 +1244,7 @@ function updateMusic() {
 function sfx(name, x, y, param = 0) {
   if (audioMuted || !ensureAudio()) return;
   if (actx && actx.state !== 'running') return;
+  if (x != null && isPracticeMode() && player && !!player.inSafeZone !== _fxSafeMap) return;
   const v = spatialGain(x, y);
   if (v < 0.07 && x != null) return;
   const pan = x != null ? spatialPan(x) : 0;
@@ -1474,12 +1480,18 @@ function worldToScreen(wx, wy) {
   };
 }
 
-function updateCamera(dt) {
+function getSafeMapZoom() {
   const base = cam.baseZoom || 1;
+  return clamp(Math.min(base, (W - 36) / SAFE_MAP_W, (H - 48) / SAFE_MAP_H), 0.52, base);
+}
+
+function updateCamera(dt) {
+  const inSafe = isPlayerInSafeMap();
+  const base = inSafe ? getSafeMapZoom() : (cam.baseZoom || 1);
   const punch = REDUCED_MOTION ? 0 : (game.zoomPunch || 0);
   // Subtle dynamic FOV breathing when dashing or sprinting for silky speed feel.
   let speedZoom = 0;
-  if (!REDUCED_MOTION && player && player.alive && game.state === 'playing') {
+  if (!REDUCED_MOTION && !inSafe && player && player.alive && game.state === 'playing') {
     if (player.dashT > 0) speedZoom = -0.022;
     else if (player.speedBoostT > 0) speedZoom = -0.015;
     else if (Math.hypot(player.vx || 0, player.vy || 0) > 120) {
@@ -1508,20 +1520,24 @@ function updateCamera(dt) {
   const viewH = H / cam.zoom;
   let desiredLeadX = 0;
   let desiredLeadY = 0;
-  if (touchState && touchState.aimActive) {
-    desiredLeadX = touchState.aimX * 52;
-    desiredLeadY = touchState.aimY * 52;
-  } else {
-    desiredLeadX = clamp((mouse.x - W / 2) / cam.zoom * 0.085, -62, 62);
-    desiredLeadY = clamp((mouse.y - H / 2) / cam.zoom * 0.085, -62, 62);
+  if (!inSafe) {
+    if (touchState && touchState.aimActive) {
+      desiredLeadX = touchState.aimX * 52;
+      desiredLeadY = touchState.aimY * 52;
+    } else {
+      desiredLeadX = clamp((mouse.x - W / 2) / cam.zoom * 0.085, -62, 62);
+      desiredLeadY = clamp((mouse.y - H / 2) / cam.zoom * 0.085, -62, 62);
+    }
   }
   cam.leadX = damp(cam.leadX, desiredLeadX, 7.5, dt);
   cam.leadY = damp(cam.leadY, desiredLeadY, 7.5, dt);
 
-  const halfW = Math.min(viewW / 2, WORLD / 2);
-  const halfH = Math.min(viewH / 2, WORLD / 2);
-  const targetX = clamp(player.x + cam.leadX, halfW, WORLD - halfW);
-  const targetY = clamp(player.y + cam.leadY, halfH, WORLD - halfH);
+  const mapW = inSafe ? SAFE_MAP_W : WORLD;
+  const mapH = inSafe ? SAFE_MAP_H : WORLD;
+  const halfW = Math.min(viewW / 2, mapW / 2);
+  const halfH = Math.min(viewH / 2, mapH / 2);
+  const targetX = viewW >= mapW ? mapW / 2 : clamp(player.x + cam.leadX, halfW, mapW - halfW);
+  const targetY = viewH >= mapH ? mapH / 2 : clamp(player.y + cam.leadY, halfH, mapH - halfH);
   cam.x = damp(cam.x, targetX, 9.5, dt);
   cam.y = damp(cam.y, targetY, 9.5, dt);
 }
@@ -1598,6 +1614,9 @@ window.addEventListener('keydown', (e) => {
   }
   if (e.code === 'KeyT' && isPracticeMode() && player.inSafeZone && typeof teleportToCombat === 'function') {
     teleportToCombat();
+  }
+  if (e.code === 'KeyB' && isPracticeMode() && player.inSafeZone && typeof toggleSafeZonePanel === 'function') {
+    toggleSafeZonePanel();
   }
 });
 
@@ -1788,6 +1807,14 @@ function bindTouchControls() {
       else if (!player.inSafeZone && typeof returnToSafeZone === 'function') returnToSafeZone();
     });
   }
+  const armoryTouch = document.getElementById('armoryTouch');
+  if (armoryTouch) {
+    armoryTouch.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      if (!isPlayerInSafeMap()) return;
+      if (typeof toggleSafeZonePanel === 'function') toggleSafeZonePanel();
+    });
+  }
 }
 
 bindTouchControls();
@@ -1807,7 +1834,6 @@ function rectsOverlap(a, b, pad = 0) {
 
 function generateObstacles() {
   const list = [];
-  const practice = isPracticeMode();
   const add = (x, y, w, h, type) => {
     if (x < 96 || y < 96 || x + w > WORLD - 96 || y + h > WORLD - 96) return false;
     // Keep the exact center drop ring slightly open for dynamic fights.
@@ -1821,7 +1847,6 @@ function generateObstacles() {
       destroyed: false,
       _q: 0,
     };
-    if (practice && rectsOverlap(rect, SAFE_ZONE, 120)) return false;
     if (list.some((o) => rectsOverlap(rect, o, 36))) return false;
     list.push(rect);
     return true;
@@ -1879,7 +1904,6 @@ function generateBarrels() {
       const y = anchor
         ? clamp(anchor.y + rand(-300, 300), 140, WORLD - 140)
         : rand(160, WORLD - 160);
-      if (inSafeZoneRect(x, y, 120)) continue;
       if (pointInObstacle(x, y, 28)) continue;
       if (list.some((b) => distance(x, y, b.x, b.y) < 110)) continue;
       list.push({
@@ -1910,7 +1934,7 @@ function generateBoostPads() {
     let x = c.x;
     let y = c.y;
     for (let tries = 0; tries < 25; tries++) {
-      if (!inSafeZoneRect(x, y, 110) && !pointInObstacle(x, y, 42)) {
+      if (!pointInObstacle(x, y, 42)) {
         list.push({ x, y, r: 28, angle: c.angle, pulse: rand(0, TAU) });
         break;
       }
@@ -1962,11 +1986,13 @@ const FLOOR_WEAPON_POOL = [
 ];
 
 function generatePickups() {
+  const practice = isPracticeMode();
   const defs = [];
-  // Scaled for expanded 4400x4400 map & 30-operator Royale / continuous Practice combat
-  const weaponCount = isPracticeMode() ? 66 : 74;
-  for (let i = 0; i < weaponCount; i++) {
-    defs.push({ kind: 'weapon', weapon: pick(FLOOR_WEAPON_POOL), skin: randomSkin(0.3) });
+  // Practice mode has NO floor weapon drops (pick all weapons inside the separate Safe Zone map).
+  if (!practice) {
+    for (let i = 0; i < 74; i++) {
+      defs.push({ kind: 'weapon', weapon: pick(FLOOR_WEAPON_POOL), skin: randomSkin(0.3) });
+    }
   }
   for (let i = 0; i < 20; i++) defs.push({ kind: 'health' });
   for (let i = 0; i < 16; i++) defs.push({ kind: 'armor' });
@@ -1979,7 +2005,6 @@ function generatePickups() {
     for (let tries = 0; tries < 90; tries++) {
       const x = rand(140, WORLD - 140);
       const y = rand(140, WORLD - 140);
-      if (inSafeZoneRect(x, y, 120)) continue;
       if (pointInObstacle(x, y, 36)) continue;
       if (list.some((p) => distance(x, y, p.x, p.y) < 58)) continue;
       list.push({ ...def, x, y, phase: rand(0, TAU), dropLock: 0 });
@@ -1987,23 +2012,24 @@ function generatePickups() {
     }
   }
 
-  // Curated guaranteed Tier 5 apex spawns (Bazooka, Minigun & Railgun at distinct districts).
-  const heavySpots = DISTRICTS.slice().sort(() => Math.random() - 0.5);
-  const heavyWeapons = ['bazooka', 'minigun', 'railgun'];
-  for (let h = 0; h < heavyWeapons.length; h++) {
-    const spot = heavySpots[h % heavySpots.length];
-    for (let tries = 0; tries < 60; tries++) {
-      const x = clamp(spot.x + rand(-220, 220), 150, WORLD - 150);
-      const y = clamp(spot.y + rand(-220, 220), 150, WORLD - 150);
-      if (inSafeZoneRect(x, y, 120)) continue;
-      if (pointInObstacle(x, y, 38)) continue;
-      if (player && !player.inSafeZone && distance(x, y, player.x, player.y) < 280) continue;
-      if (list.some((p) => distance(x, y, p.x, p.y) < 68)) continue;
-      list.push({
-        kind: 'weapon', weapon: heavyWeapons[h], skin: randomSkin(0.95),
-        x, y, phase: rand(0, TAU), dropLock: 0,
-      });
-      break;
+  // Curated guaranteed Tier 5 apex spawns in Royale mode only (never in Practice mode).
+  if (!practice) {
+    const heavySpots = DISTRICTS.slice().sort(() => Math.random() - 0.5);
+    const heavyWeapons = ['bazooka', 'minigun', 'railgun'];
+    for (let h = 0; h < heavyWeapons.length; h++) {
+      const spot = heavySpots[h % heavySpots.length];
+      for (let tries = 0; tries < 60; tries++) {
+        const x = clamp(spot.x + rand(-220, 220), 150, WORLD - 150);
+        const y = clamp(spot.y + rand(-220, 220), 150, WORLD - 150);
+        if (pointInObstacle(x, y, 38)) continue;
+        if (player && !player.inSafeZone && distance(x, y, player.x, player.y) < 280) continue;
+        if (list.some((p) => distance(x, y, p.x, p.y) < 68)) continue;
+        list.push({
+          kind: 'weapon', weapon: heavyWeapons[h], skin: randomSkin(0.95),
+          x, y, phase: rand(0, TAU), dropLock: 0,
+        });
+        break;
+      }
     }
   }
   return list;
@@ -2014,6 +2040,7 @@ function generateSafeZoneLayout() {
   safeZoneDummies = [];
   if (!isPracticeMode()) return;
 
+  // Dedicated 1400x820 Safe Zone Map: Armory Bay (left) + Firing Range (right) + Deploy Pad (bottom)
   const keysList = Object.keys(WEAPONS);
   for (let i = 0; i < keysList.length; i++) {
     const col = i % 6;
@@ -2021,8 +2048,8 @@ function generateSafeZoneLayout() {
     safeZoneStations.push({
       kind: 'weapon',
       weapon: keysList[i],
-      x: SAFE_ZONE.x + 95 + col * 116,
-      y: SAFE_ZONE.y + 112 + row * 112,
+      x: 152 + col * 124,
+      y: 196 + row * 116,
       r: 22,
     });
   }
@@ -2031,28 +2058,33 @@ function generateSafeZoneLayout() {
     safeZoneStations.push({
       kind: 'gadget',
       gadget: gadgetIds[i],
-      x: SAFE_ZONE.x + 95 + i * 104,
-      y: SAFE_ZONE.y + 392,
+      x: 200 + i * 134,
+      y: 446,
       r: 21,
     });
   }
   safeZoneStations.push({
     kind: 'skin',
-    x: SAFE_ZONE.x + 440,
-    y: SAFE_ZONE.y + 392,
-    r: 24,
+    x: 650,
+    y: 446,
+    r: 23,
   });
 
-  // Two live firing-range dummies (Unarmored & Armored) to test weapons inside Safe Zone.
+  // Three live regenerating firing-range dummies inside the dedicated right-side ballistic bay.
   safeZoneDummies.push(
     {
-      id: -101, name: 'DUMMY 100HP', x: SAFE_ZONE.x + 860, y: SAFE_ZONE.y + 165,
+      id: -101, name: 'DUMMY 100', x: 1135, y: 230,
       r: 20, hp: 100, maxHp: 100, hpTrail: 100, armor: 0, maxArmor: 0,
       hitFlash: 0, respawnT: 0, alive: true, flinchX: 0, flinchY: 0, isDummy: true,
     },
     {
-      id: -102, name: 'ARMORED 175', x: SAFE_ZONE.x + 860, y: SAFE_ZONE.y + 330,
+      id: -102, name: 'ARMORED 175', x: 1235, y: 428,
       r: 20, hp: 100, maxHp: 100, hpTrail: 100, armor: 75, maxArmor: 75,
+      hitFlash: 0, respawnT: 0, alive: true, flinchX: 0, flinchY: 0, isDummy: true,
+    },
+    {
+      id: -103, name: 'HEAVY 250', x: 1165, y: 626,
+      r: 22, hp: 150, maxHp: 150, hpTrail: 150, armor: 100, maxArmor: 100,
       hitFlash: 0, respawnT: 0, alive: true, flinchX: 0, flinchY: 0, isDummy: true,
     }
   );
@@ -2062,7 +2094,6 @@ function spawnPosition(pad = 150) {
   for (let i = 0; i < 100; i++) {
     const x = rand(pad, WORLD - pad);
     const y = rand(pad, WORLD - pad);
-    if (inSafeZoneRect(x, y, 160)) continue;
     if (!pointInObstacle(x, y, 34)) return { x, y };
   }
   return { x: WORLD * 0.52, y: WORLD * 0.50 };

@@ -3,31 +3,49 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
-<title>BATTLEGROUND — Tactical Royale v0.1.3</title>
-<link rel="stylesheet" href="style.css?v=10" />
+<title>BATTLEGROUND — Tactical Royale v0.1.4</title>
+<link rel="stylesheet" href="style.css?v=11" />
 </head>
 <body>
 <canvas id="game"></canvas>
 
 <!-- ===================== IN-GAME TACTICAL HUD ===================== -->
 <div id="ui">
-  <div id="fpsBadge" class="hidden" aria-live="off">60 FPS · MED</div>
+  <div id="topLeftDock">
+    <div id="fpsBadge" class="hidden" aria-live="off">60 FPS · MED</div>
 
-  <div id="practiceBar" class="hidden" aria-label="Practice mode quick actions">
-    <button id="returnSafeBtn" type="button" class="safeReturnBtn" title="Teleport back to Safe Zone (H)">
-      <span class="safeDot" aria-hidden="true"></span>
-      <span>SAFE ZONE</span>
-      <kbd>H</kbd>
-    </button>
+    <div id="practiceBar" class="hidden" aria-label="Return to Safe Zone">
+      <button id="returnSafeBtn" type="button" class="safeActionBtn" title="Return to Safe Zone Map (H)">
+        <span class="safeDot" aria-hidden="true"></span>
+        <span>SAFE ZONE</span>
+        <kbd>H</kbd>
+      </button>
+    </div>
+
+    <div id="safeZoneControls" class="hidden" aria-label="Safe Zone quick controls">
+      <button id="toggleArmoryBtn" type="button" class="safeActionBtn" title="Open or close Quick Armory (B)">
+        <span class="safeDot" aria-hidden="true"></span>
+        <span>ARMORY</span>
+        <kbd>B</kbd>
+      </button>
+      <button id="topDeployBtn" type="button" class="safeActionBtn deploy" title="Teleport to Combat Arena (T)">
+        <span>COMBAT TP</span>
+        <kbd>T</kbd>
+      </button>
+    </div>
   </div>
 
   <aside id="safeZonePanel" class="hidden" aria-label="Safe Zone Weapon Armory">
     <div class="szHead">
       <div>
         <span>SAFE ZONE ARMORY</span>
-        <small>FREE LOADOUT · SLOT 1 / 2</small>
+        <small>FREE LOADOUT · SEPARATE MAP</small>
       </div>
-      <em class="szShieldTag">INVULNERABLE</em>
+      <button id="closeSafeZoneBtn" type="button" class="szCloseBtn" title="Close Armory (B / Esc)" aria-label="Close Armory">&times;</button>
+    </div>
+    <div class="szSlotRow" role="group" aria-label="Target weapon slot">
+      <button type="button" class="szSlotBtn active" data-sz-slot="0">SLOT 1</button>
+      <button type="button" class="szSlotBtn" data-sz-slot="1">SLOT 2</button>
     </div>
     <div class="szSectionLabel">WEAPONS (12)</div>
     <div id="safeZoneWeapons" class="szWeaponGrid"></div>
@@ -42,17 +60,18 @@
   </aside>
 
   <div id="topbar">
-    <div class="pill"><span class="dot"></span><b id="aliveCount">30</b><span>ALIVE</span></div>
-    <div class="pill zone"><span class="zoneIcon"></span><span id="zoneText">ZONE SHRINKS IN 18s</span></div>
-    <div class="pill supply"><span class="supplyIcon"></span><span id="supplyText">CACHE 01:00</span></div>
-    <div class="pill"><b id="killCount">0</b><span>ELIMS</span></div>
+    <div class="pill safe hidden" id="safePill"><span class="safeDot"></span><span>SAFE ZONE</span></div>
+    <div class="pill" id="alivePill"><span class="dot"></span><b id="aliveCount">30</b><span>ALIVE</span></div>
+    <div class="pill zone" id="zonePill"><span class="zoneIcon"></span><span id="zoneText">ZONE 1 · 30s</span></div>
+    <div class="pill supply" id="supplyPill"><span class="supplyIcon"></span><span id="supplyText">CACHE 01:00</span></div>
+    <div class="pill" id="elimsPill"><b id="killCount">0</b><span>ELIMS</span></div>
     <div class="pill aura" id="auraPill"><span class="auraStar">✦</span><b id="auraCount">0</b><span>AURA</span></div>
   </div>
 
   <div id="minimapWrap">
     <div class="hudCorners" aria-hidden="true"></div>
-    <canvas id="minimap" width="200" height="200"></canvas>
-    <div id="minimapLabel">RADAR · BATTLEGROUND</div>
+    <canvas id="minimap" width="180" height="180"></canvas>
+    <div id="minimapLabel">RADAR</div>
   </div>
 
   <div id="feed"></div>
@@ -70,8 +89,11 @@
   <div id="bottomLeft">
     <div class="hudPlate">
       <div class="playerTag">
-        <canvas id="hudPortrait" width="52" height="52" aria-hidden="true"></canvas>
-        <div class="playerMeta"><em>OPERATOR</em> <span id="operatorName">KAI</span><small id="hudBuff">COMBAT READY</small></div>
+        <canvas id="hudPortrait" width="44" height="44" aria-hidden="true"></canvas>
+        <div class="playerMeta">
+          <div class="playerTitleRow"><em>OP</em><span id="operatorName">KAI</span></div>
+          <small id="hudBuff">COMBAT READY</small>
+        </div>
       </div>
       <div class="statRow"><span class="lbl">HP</span><div class="bar hp"><div id="hpTrail" class="trail"></div><div id="hpFill" class="fill"></div></div><b id="hpText">100</b></div>
       <div class="statRow"><span class="lbl">ARM</span><div class="bar armor"><div id="armorFill" class="fill"></div></div><b id="armorText">0</b></div>
@@ -94,10 +116,14 @@
       </div>
     </div>
     <div class="weaponPlate">
-      <canvas id="hudWeapon" width="150" height="44" aria-hidden="true"></canvas>
-      <div id="weaponName">PISTOL</div>
-      <div id="skinName">FACTORY FINISH</div>
-      <div id="ammoRow"><span id="mag">12</span><span class="slash">/</span><span class="inf">∞</span></div>
+      <div class="weaponMainRow">
+        <div class="weaponMeta">
+          <canvas id="hudWeapon" width="126" height="36" aria-hidden="true"></canvas>
+          <div id="weaponName">PISTOL</div>
+          <div id="skinName">FACTORY FINISH</div>
+        </div>
+        <div id="ammoRow"><span id="mag">12</span><span class="slash">/</span><span class="inf">∞</span></div>
+      </div>
       <div id="reloadWrap"><div id="reloadFill"></div></div>
     </div>
     <div id="dashHint" class="ready"><span id="dashLabel">SPACE · DASH READY</span></div>
@@ -126,6 +152,7 @@
   <button id="swapTouch" class="touchAction swapAction" type="button" aria-label="Swap weapon">SWAP</button>
   <button id="interactTouch" class="touchAction interactAction hidden" type="button" aria-label="Pick up weapon">E</button>
   <button id="safeTouch" class="touchAction safeAction hidden" type="button" aria-label="Safe Zone Teleport">SAFE</button>
+  <button id="armoryTouch" class="touchAction armoryAction hidden" type="button" aria-label="Toggle Quick Armory">GUNS</button>
   <button id="pauseTouch" class="touchAction pauseAction" type="button" aria-label="Pause">II</button>
 </div>
 
@@ -138,7 +165,7 @@
       <div class="brandMark" aria-hidden="true"><span></span></div>
       <div class="brandTitles">
         <div class="brandLogo">BATTLE<span>GROUND</span></div>
-        <div class="brandVer">RELEASE 0.1.3 · TACTICAL ROYALE</div>
+        <div class="brandVer">RELEASE 0.1.4 · TACTICAL ROYALE</div>
       </div>
     </div>
 
@@ -220,9 +247,9 @@
 
     <!-- Center Stage: Hero Title Crest over Live Animated Arena -->
     <section class="lobbyCenter" aria-hidden="false">
-      <div class="seasonTag"><i class="liveDot"></i> SEASON 01 · RELEASE 0.1.3</div>
+      <div class="seasonTag"><i class="liveDot"></i> SEASON 01 · RELEASE 0.1.4</div>
       <h1>BATTLE<span>GROUND</span></h1>
-      <p class="tagline">30-operator expanded arena. Dual weapons, tactical gadgets, destructible cover &amp; Practice Safe Zone.</p>
+      <p class="tagline">30-operator expanded arena. Dual weapons, tactical gadgets, destructible cover &amp; dedicated Practice Safe Zone map.</p>
       <div class="rankProgressBox">
         <div class="profileLine">
           <b id="lifetimeAura">0</b>
@@ -254,7 +281,7 @@
           <div class="ctrl"><kbd>1 2 / Q</kbd><span>Switch Gun</span></div>
           <div class="ctrl"><kbd>E / R</kbd><span>Swap / Reload</span></div>
           <div class="ctrl"><kbd>SPACE</kbd><span>Dash · i-frames</span></div>
-          <div class="ctrl"><kbd>H / T</kbd><span>Safe Zone / TP</span></div>
+          <div class="ctrl"><kbd>H / T / B</kbd><span>Safe · TP · Guns</span></div>
         </div>
       </div>
     </section>
@@ -270,7 +297,7 @@
         </button>
         <button type="button" data-mode="practice" aria-pressed="false">
           <strong>PRACTICE</strong>
-          <small>20 OPS · SAFE ZONE · ∞</small>
+          <small>20 OPS · SAFE MAP · ∞</small>
         </button>
       </div>
       <div id="modeDesc" class="modeSubDesc">30 operators · 4400m expanded map, extended storm &amp; supply caches</div>
@@ -393,7 +420,7 @@
   <div class="panel pausePanel">
     <div class="menuTopTools">
       <button type="button" class="miniChip" data-fps-toggle aria-pressed="false">FPS HUD: OFF</button>
-      <span class="verTag">v0.1.3</span>
+      <span class="verTag">v0.1.4</span>
     </div>
     <div class="eyebrow">MATCH PAUSED</div>
     <h2>HOLD POSITION</h2>
@@ -463,10 +490,10 @@
   </div>
 </div>
 
-<script src="js/core.js?v=10"></script>
-<script src="js/profile.js?v=10"></script>
-<script src="js/combat.js?v=10"></script>
-<script src="js/render.js?v=10"></script>
-<script src="js/main.js?v=10"></script>
+<script src="js/core.js?v=11"></script>
+<script src="js/profile.js?v=11"></script>
+<script src="js/combat.js?v=11"></script>
+<script src="js/render.js?v=11"></script>
+<script src="js/main.js?v=11"></script>
 </body>
 </html>
