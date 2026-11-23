@@ -93,7 +93,7 @@ const WEAPONS = {
     dmg: 13.5, rpm: 670, mag: 70, reload: 3.05,
     spread: 0.078, speed: 1850, pellets: 1, range: 1020, pref: 380,
     color: '#c7f464', tracer: '#eaffb0', kick: 2.2, len: 48, thick: 14, sound: 'lmg',
-    critBonus: 0.04,
+    critBonus: 0.04, moveMul: 0.95,
   },
   sniper: {
     name: 'SNIPER', short: 'SR', tier: 4, model: 'sniper',
@@ -108,6 +108,24 @@ const WEAPONS = {
     spread: 0.002, speed: 3600, pellets: 1, range: 2250, pref: 840,
     color: '#ff5cf4', tracer: '#ffc4fb', kick: 7.4, len: 56, thick: 11, sound: 'railgun',
     critBonus: 0.2, pierce: 1, beam: true, knockback: 42,
+  },
+  minigun: {
+    name: 'MINIGUN', short: 'MG', tier: 5, model: 'minigun',
+    dmg: 8.5, rpm: 1260, mag: 96, reload: 3.45,
+    spread: 0.068, heatSpread: 0.036, speed: 1920, pellets: 1, range: 860, pref: 310,
+    color: '#ffbe3b', tracer: '#ffe38f', kick: 1.35, len: 50, thick: 17, sound: 'minigun',
+    critBonus: 0, critMul: 1.2, knockback: 3.5, crateDmgMul: 1.25,
+    spinUp: 0.52, spinDown: 0.85, moveMul: 0.88, firingMoveMul: 0.64,
+  },
+  bazooka: {
+    name: 'BAZOOKA', short: 'BZ', tier: 5, model: 'bazooka',
+    dmg: 24, splashDmg: 82, splashRadius: 138, selfDmgMul: 0.72,
+    rpm: 36, mag: 1, reload: 2.25,
+    spread: 0.016, speed: 560, rocketAccel: 1150, rocketMaxSpeed: 980,
+    pellets: 1, range: 1080, pref: 470,
+    color: '#ff6b35', tracer: '#ffcf70', kick: 8.4, len: 54, thick: 15, sound: 'bazooka',
+    canCrit: false, explosive: true, knockback: 300, crateDmgMul: 1.85,
+    moveMul: 0.86,
   },
 };
 
@@ -785,6 +803,7 @@ const SFX_LAST = Object.create(null);
 const SFX_GAP = {
   pistol: 45, smg: 48, shotgun: 70, revolver: 60, rifle: 55,
   pulse: 42, dmr: 55, lmg: 48, sniper: 80, railgun: 95,
+  minigun: 42, minigunSpin: 150, bazooka: 120,
   hit: 38, crit: 55, hurt: 140, kill: 110, streak: 200, aura: 120,
   ui: 40, armor: 120, explosion: 90, emp: 120, smoke: 120,
   bounce: 60, boost: 180, crateBreak: 70, swap: 75, throw: 90,
@@ -1044,6 +1063,20 @@ function sfx(name, x, y) {
       tone(1850, 0.18, 'sawtooth', 0.13 * v, -1550, 0, null, pan);
       tone(95, 0.26, 'triangle', 0.24 * v, -45, 0, null, pan);
       noiseBurst(0.16, 0.44 * v, 5200, 0, null, pan);
+      break;
+    case 'minigun':
+      noiseBurst(0.036, 0.22 * v, 3400, 0, null, pan);
+      tone(165, 0.04, 'sawtooth', 0.08 * v, -95, 0, null, pan);
+      tone(520, 0.025, 'square', 0.032 * v, -260, 0, null, pan);
+      break;
+    case 'minigunSpin':
+      tone(140, 0.14, 'sawtooth', 0.045 * v, 210, 0, null, pan);
+      tone(290, 0.13, 'triangle', 0.03 * v, 280, 0.01, null, pan);
+      break;
+    case 'bazooka':
+      tone(112, 0.24, 'triangle', 0.24 * v, -74, 0, null, pan);
+      noiseBurst(0.32, 0.44 * v, 1100, 0, null, pan);
+      noiseBurst(0.26, 0.22 * v, 2400, 0.04, null, pan);
       break;
     case 'explosion':
       noiseBurst(0.45, 0.58 * v, 680, 0, null, pan);
@@ -1648,6 +1681,25 @@ function generatePickups() {
       if (pointInObstacle(x, y, 38)) continue;
       if (list.some((p) => distance(x, y, p.x, p.y) < 64)) continue;
       list.push({ ...def, x, y, phase: rand(0, TAU), dropLock: 0 });
+      break;
+    }
+  }
+
+  // Curated rare Tier 5 heavy ordnance spawns (1 Bazooka & 1 Minigun at distinct landmarks).
+  const heavySpots = DISTRICTS.slice().sort(() => Math.random() - 0.5);
+  const heavyWeapons = ['bazooka', 'minigun'];
+  for (let h = 0; h < heavyWeapons.length; h++) {
+    const spot = heavySpots[h % heavySpots.length];
+    for (let tries = 0; tries < 60; tries++) {
+      const x = clamp(spot.x + rand(-210, 210), 150, WORLD - 150);
+      const y = clamp(spot.y + rand(-210, 210), 150, WORLD - 150);
+      if (pointInObstacle(x, y, 40)) continue;
+      if (player && distance(x, y, player.x, player.y) < 320) continue;
+      if (list.some((p) => distance(x, y, p.x, p.y) < 76)) continue;
+      list.push({
+        kind: 'weapon', weapon: heavyWeapons[h], skin: randomSkin(0.65),
+        x, y, phase: rand(0, TAU), dropLock: 0,
+      });
       break;
     }
   }

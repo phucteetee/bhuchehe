@@ -827,13 +827,222 @@ function drawPickups() {
 }
 
 /* ---------------------------------------------------------
-   Weapon Models (10 Models including Pulse AR & Railgun)
+   Weapon Models (12 Models including 6-Barrel Minigun & Bazooka)
    --------------------------------------------------------- */
+function drawMinigunBarrels(c, L, t, accent, phase, heat) {
+  const x0 = 20;
+  const x1 = L + 6;
+  const radius = t * 0.36;
+  const barrels = [];
+  for (let k = 0; k < 6; k++) {
+    const a = phase + (k / 6) * TAU;
+    barrels.push({ y: Math.sin(a) * radius, z: Math.cos(a) });
+  }
+  barrels.sort((a, b) => a.z - b.z);
+
+  // Dark inner rotary spindle backing (cleanly covers static barrels during live spin)
+  c.fillStyle = '#0c1218';
+  c.fillRect(x0, -radius - 1.5, x1 - x0 - 1, radius * 2 + 3);
+
+  // 6 individual steel rotary barrels sorted back-to-front
+  for (let i = 0; i < barrels.length; i++) {
+    const br = barrels[i];
+    const lit = 0.5 + 0.5 * br.z;
+    const shade = Math.round(42 + lit * 98);
+    c.fillStyle = `rgb(${shade},${shade + 8},${shade + 14})`;
+    c.fillRect(x0, br.y - 1.35, x1 - x0, 2.7);
+    if (lit > 0.6) {
+      c.fillStyle = 'rgba(235,248,255,0.42)';
+      c.fillRect(x0 + 2, br.y - 1.0, x1 - x0 - 4, 0.8);
+    }
+  }
+
+  // Molten thermal barrel glow as rotary heat builds
+  if (heat > 0.04) {
+    c.save();
+    c.globalCompositeOperation = 'lighter';
+    c.globalAlpha = clamp(heat * 0.72, 0, 0.75);
+    c.fillStyle = heat > 0.65 ? '#ff5526' : '#ff9f45';
+    rr(c, x0 + 4, -radius - 1.8, (x1 - x0) - 6, radius * 2 + 3.6, 2.5);
+    c.fill();
+    c.restore();
+  }
+
+  // Three circular rotary barrel-clamp rings
+  const clampH = radius * 2 + 4.2;
+  for (const cx of [x0 + 8, x0 + 26, x1 - 4]) {
+    c.fillStyle = '#141d25';
+    rr(c, cx - 2.2, -clampH / 2, 4.4, clampH, 1.5);
+    c.fill();
+    c.strokeStyle = cx > x1 - 6 ? accent : 'rgba(200,225,238,0.35)';
+    c.lineWidth = 1;
+    c.stroke();
+  }
+  // Muzzle tip accent flash collar
+  c.fillStyle = accent;
+  c.fillRect(x1 - 1.5, -radius - 0.8, 2.2, radius * 2 + 1.6);
+}
+
 function drawGunModel(c, w, accent, fancy) {
   const ctx = c;
   const t = w.thick;
   const L = w.len + 20;
   ctx.save();
+
+  if (w.model === 'bazooka') {
+    if (fancy) {
+      ctx.globalAlpha = 0.36;
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = 2.6;
+      rr(ctx, -14, -t / 2 - 2.5, L + 22, t + 5, 5);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    // Cast shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.48)';
+    rr(ctx, -11, -t / 2 + 3, L + 14, t, 4);
+    ctx.fill();
+
+    // Rear flared venturi backblast cone
+    ctx.fillStyle = '#151c20';
+    ctx.beginPath();
+    ctx.moveTo(-14, -t * 0.56);
+    ctx.lineTo(2, -t * 0.38);
+    ctx.lineTo(2, t * 0.38);
+    ctx.lineTo(-14, t * 0.56);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#ff8c42';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(-13.5, -t * 0.52);
+    ctx.lineTo(-13.5, t * 0.52);
+    ctx.stroke();
+
+    // Main launch tube body (olive-slate titanium)
+    ctx.fillStyle = '#24322b';
+    rr(ctx, -1, -t * 0.42, L - 2, t * 0.84, 3);
+    ctx.fill();
+    ctx.strokeStyle = '#0c1210';
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+    // Upper metallic specular highlight
+    ctx.fillStyle = 'rgba(220,245,235,0.22)';
+    ctx.fillRect(3, -t * 0.36, L - 10, 2);
+    // Hazard bands & reinforcement rings
+    ctx.fillStyle = '#11181c';
+    for (const bx of [10, 32, 54]) {
+      rr(ctx, bx, -t * 0.48, 5, t * 0.96, 1.5);
+      ctx.fill();
+    }
+    ctx.fillStyle = accent;
+    ctx.globalAlpha = 0.88;
+    ctx.fillRect(18, -t * 0.14, 32, t * 0.28);
+    ctx.fillRect(2, -t * 0.34, 4, t * 0.68);
+    ctx.globalAlpha = 1;
+
+    // Optical side-mounted rocket sight
+    ctx.fillStyle = '#0d141a';
+    rr(ctx, 20, -t * 0.42 - 6.5, 19, 5.5, 2);
+    ctx.fill();
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    ctx.fillStyle = '#7ef2ff';
+    ctx.fillRect(36, -t * 0.42 - 5.2, 2.5, 3);
+
+    // Front flared muzzle bell
+    ctx.fillStyle = '#182126';
+    ctx.beginPath();
+    ctx.moveTo(L - 8, -t * 0.44);
+    ctx.lineTo(L + 1, -t * 0.58);
+    ctx.lineTo(L + 1, t * 0.58);
+    ctx.lineTo(L - 8, t * 0.44);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Protruding warhead nosecone
+    ctx.fillStyle = '#3a4a3e';
+    ctx.beginPath();
+    ctx.moveTo(L, -t * 0.36);
+    ctx.quadraticCurveTo(L + 8, -t * 0.24, L + 11, 0);
+    ctx.quadraticCurveTo(L + 8, t * 0.24, L, t * 0.36);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = accent;
+    ctx.fillRect(L + 2, -t * 0.28, 3.2, t * 0.56);
+    ctx.fillStyle = '#ffe9b0';
+    ctx.beginPath();
+    ctx.arc(L + 9.8, 0, 1.8, 0, TAU);
+    ctx.fill();
+
+    ctx.restore();
+    return;
+  }
+
+  if (w.model === 'minigun') {
+    if (fancy) {
+      ctx.globalAlpha = 0.36;
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = 2.6;
+      rr(ctx, -8, -t / 2 - 2.5, L + 16, t + 5, 5);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    // Cast shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    rr(ctx, -4, -t / 2 + 3, L + 9, t, 4);
+    ctx.fill();
+
+    // Heavy motorized rotary housing (rear)
+    ctx.fillStyle = '#121920';
+    rr(ctx, -6, -t * 0.54, 29, t * 1.08, 4);
+    ctx.fill();
+    ctx.strokeStyle = '#070b0f';
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+    // Housing bevel & cooling vents
+    ctx.fillStyle = '#24303a';
+    rr(ctx, -2, -t * 0.38, 22, t * 0.76, 2.5);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.22)';
+    ctx.fillRect(-1, -t * 0.48, 20, 1.6);
+    ctx.fillStyle = '#0b1016';
+    for (let v = 0; v < 3; v++) {
+      ctx.fillRect(2 + v * 5, -t * 0.24, 2.6, t * 0.48);
+    }
+    // Top chainsaw carry bar
+    ctx.strokeStyle = '#53626e';
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.moveTo(0, -t * 0.54);
+    ctx.lineTo(3, -t * 0.54 - 5);
+    ctx.lineTo(18, -t * 0.54 - 5);
+    ctx.lineTo(20, -t * 0.54);
+    ctx.stroke();
+    // Under-slung drum magazine & brass feed belt
+    ctx.fillStyle = '#0d141a';
+    rr(ctx, 4, t * 0.42, 16, 10, 3);
+    ctx.fill();
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    ctx.fillStyle = '#ffd166';
+    for (let b = 0; b < 4; b++) ctx.fillRect(6 + b * 3.2, t * 0.42 + 2.5, 2, 5);
+    // Accent power strip on receiver
+    ctx.fillStyle = accent;
+    ctx.fillRect(-4, -t * 0.12, 4, t * 0.24);
+
+    // 6-barrel rotary cluster (static pose for sprite/HUD)
+    drawMinigunBarrels(ctx, L, t, accent, 0.25, 0);
+
+    ctx.restore();
+    return;
+  }
+
   if (fancy) {
     ctx.globalAlpha = 0.35;
     ctx.strokeStyle = accent;
@@ -982,10 +1191,10 @@ function getGunSprite(w, accent, fancy) {
   if (gunSpriteCache[key]) return gunSpriteCache[key];
   const L = w.len + 20;
   const t = w.thick;
-  const padX = 12;
-  const padY = 16;
-  const unitW = L + padX * 2 + 10;
-  const unitH = t + padY * 2 + 12;
+  const padX = 18;
+  const padY = 18;
+  const unitW = L + padX * 2 + 12;
+  const unitH = t + padY * 2 + 14;
   const image = document.createElement('canvas');
   image.width = Math.ceil(unitW * GUN_SPRITE_SCALE);
   image.height = Math.ceil(unitH * GUN_SPRITE_SCALE);
@@ -1323,10 +1532,14 @@ function drawPlanetShowcase(canvasElement, id) {
 function drawAimLine() {
   const p = player;
   if (!p || !p.alive) return;
+  const w = WEAPONS[p.weapon];
   const startX = p.x + Math.cos(p.angle) * (p.r + 22);
   const startY = p.y + Math.sin(p.angle) * (p.r + 22);
   ctx.save();
-  ctx.strokeStyle = p.jamT > 0 ? 'rgba(94,231,255,0.06)' : 'rgba(94,231,255,0.16)';
+  ctx.strokeStyle = p.jamT > 0 ? 'rgba(94,231,255,0.06)'
+    : w && w.explosive ? 'rgba(255,107,53,0.24)'
+    : w && w.spinUp && p.spin > 0.1 ? 'rgba(255,190,59,0.22)'
+    : 'rgba(94,231,255,0.16)';
   ctx.lineWidth = 1;
   ctx.setLineDash([3, 7]);
   ctx.beginPath();
@@ -1506,6 +1719,10 @@ function drawEntity(e) {
   ctx.translate(-kick, 0);
   if (e.muzzleRise) ctx.rotate(e.muzzleRise);
   drawGunSprite(ctx, w, accent, skin.bonus > 0);
+  // Live animated 6-barrel spin + thermal barrel glow for active Minigun
+  if (w.model === 'minigun' && ((e.spin || 0) > 0.01 || (e.heat || 0) > 0.02)) {
+    drawMinigunBarrels(ctx, w.len + 20, w.thick, accent, e.spinPhase || 0.25, e.heat || 0);
+  }
   // Tactical gloved hands following recoil
   ctx.fillStyle = '#18242e';
   ctx.strokeStyle = e.light;
@@ -1605,6 +1822,8 @@ const BULLET_TRAILS = {
   lmg: { len: 24, width: 2.7 },
   sniper: { len: 48, width: 3.4 },
   railgun: { len: 62, width: 4.0 },
+  minigun: { len: 21, width: 2.3 },
+  bazooka: { len: 28, width: 5.0 },
 };
 
 function drawBullets() {
@@ -1619,6 +1838,56 @@ function drawBullets() {
     const speed = Math.hypot(b.vx, b.vy) || 1;
     const ux = b.vx / speed;
     const uy = b.vy / speed;
+
+    if (b.explosive) {
+      // Dedicated Bazooka rocket warhead + flickering thruster flame
+      ctx.save();
+      ctx.translate(b.x, b.y);
+      ctx.rotate(Math.atan2(uy, ux));
+      const flicker = 0.8 + 0.35 * Math.sin(game.time * 65 + i * 3);
+      // Thruster flame plume (additive)
+      ctx.globalAlpha = 0.85;
+      ctx.fillStyle = '#ff6b35';
+      ctx.beginPath();
+      ctx.moveTo(-7, -4.5);
+      ctx.lineTo(-22 * flicker, 0);
+      ctx.lineTo(-7, 4.5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#fff1b8';
+      ctx.beginPath();
+      ctx.moveTo(-7, -2.2);
+      ctx.lineTo(-14 * flicker, 0);
+      ctx.lineTo(-7, 2.2);
+      ctx.closePath();
+      ctx.fill();
+
+      // Solid metallic warhead body & tail fins
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#1b2429';
+      ctx.beginPath();
+      ctx.moveTo(-9, -6.5); ctx.lineTo(-4, -3); ctx.lineTo(-4, 3); ctx.lineTo(-9, 6.5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#39483e';
+      rr(ctx, -8, -3.4, 15, 6.8, 2);
+      ctx.fill();
+      ctx.fillStyle = b.color || '#ffcf70';
+      ctx.beginPath();
+      ctx.moveTo(5, -3.5);
+      ctx.quadraticCurveTo(12, -2, 14, 0);
+      ctx.quadraticCurveTo(12, 2, 5, 3.5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(11.5, 0, 1.4, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+      continue;
+    }
+
     const cfg = BULLET_TRAILS[b.weapon] || BULLET_TRAILS.rifle;
     const tail = cfg.len;
     if (!fast) {
@@ -1941,6 +2210,15 @@ function drawDynamicLights() {
     const sp = getLightSprite('#ff7a3d');
     ctx.drawImage(sp, bar.x - 80, bar.y - 80, 160, 160);
   }
+  // Flying Bazooka rocket thruster halos
+  for (let i = 0; i < bullets.length; i++) {
+    const b = bullets[i];
+    if (!b.explosive) continue;
+    if (b.x < v.l || b.x > v.r || b.y < v.t || b.y > v.b) continue;
+    ctx.globalAlpha = 0.42;
+    const sp = getLightSprite('#ff7a3d');
+    ctx.drawImage(sp, b.x - 68, b.y - 68, 136, 136);
+  }
   ctx.restore();
 }
 
@@ -2192,16 +2470,20 @@ function drawCrosshair() {
 
   const x = mouse.x;
   const y = mouse.y;
+  const curWeapon = WEAPONS[player.weapon];
   const speedRatio = clamp(Math.hypot(player.vx || 0, player.vy || 0) / Math.max(1, player.speed), 0, 1.2);
+  const heatSpread = (player.heat || 0) * (curWeapon.heatSpread || 0);
   const targetSpread = clamp(
-    8 + (WEAPONS[player.weapon].spread + (player.bloom || 0)) * 62 + speedRatio * 4,
-    8, 22
+    8 + (curWeapon.spread + (player.bloom || 0) + heatSpread) * 62 + speedRatio * 4,
+    8, 24
   );
   _crosshairSpread = damp(_crosshairSpread, targetSpread, 18, dt);
   const spread = _crosshairSpread;
 
   ctx.save();
-  ctx.strokeStyle = player.jamT > 0 ? '#5ee7ff' : 'rgba(255,255,255,0.88)';
+  ctx.strokeStyle = player.jamT > 0 ? '#5ee7ff'
+    : curWeapon.explosive ? 'rgba(255,155,102,0.92)'
+    : 'rgba(255,255,255,0.88)';
   ctx.lineWidth = 1.5;
   ctx.beginPath();
   ctx.arc(x, y, 1.6, 0, TAU);
@@ -2213,6 +2495,28 @@ function drawCrosshair() {
     ctx.lineTo(x + cx * (spread + 5.5), y + cy * (spread + 5.5));
   }
   ctx.stroke();
+
+  // Bazooka blast-bracket reticle ring
+  if (curWeapon.explosive && !player.reloading) {
+    ctx.strokeStyle = 'rgba(255,107,53,0.42)';
+    ctx.lineWidth = 1.2;
+    ctx.setLineDash([4, 5]);
+    ctx.beginPath();
+    ctx.arc(x, y, spread + 8, 0, TAU);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Minigun rotary spin-up & thermal heat arc around crosshair
+  if (curWeapon.spinUp && ((player.spin || 0) > 0.02 || (player.heat || 0) > 0.05)) {
+    const sp = clamp(player.spin || 0, 0, 1);
+    const ht = clamp(player.heat || 0, 0, 1);
+    ctx.strokeStyle = ht > 0.6 ? '#ff5a3c' : (sp >= 0.99 ? '#ffd166' : '#5ee7ff');
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.arc(x, y, 25, -Math.PI * 0.75, -Math.PI * 0.75 + Math.PI * 1.5 * Math.max(sp, ht * 0.5));
+    ctx.stroke();
+  }
 
   if (player.dashCd > 0 && getGraphicsSettings().fx >= 1) {
     const dp = clamp(1 - player.dashCd / (DASH_COOLDOWN * (player.dashCdMul || 1)), 0, 1);
@@ -2410,6 +2714,20 @@ function updateHUD() {
   } else if (player.hp < player.maxHp * (player.regenCap || 0.7) && game.regenDelay <= 0) {
     buff = 'REGENERATING';
     buffTone = 'green';
+  } else if (player.weapon === 'minigun' && !player.reloading) {
+    if ((player.heat || 0) > 0.62) {
+      buff = 'ROTARY HOT';
+      buffTone = 'red';
+    } else if ((player.spin || 0) > 0.06 && (player.spin || 0) < 0.99) {
+      buff = 'SPINNING UP ' + Math.round(player.spin * 100) + '%';
+      buffTone = 'amber';
+    } else if ((player.spin || 0) >= 0.99) {
+      buff = '6-BARREL ACTIVE';
+      buffTone = 'gold';
+    }
+  } else if (player.weapon === 'bazooka' && !player.reloading) {
+    buff = 'ORDNANCE ARMED';
+    buffTone = 'amber';
   }
   if (buff !== hudCache.buff && UI.hudBuff) {
     hudCache.buff = buff;
@@ -2528,8 +2846,16 @@ function updateHUD() {
         UI.pickupPrompt.classList.toggle('upgrade', better);
         UI.pickupTitle.textContent = arrow + (ns.bonus > 0 ? ns.name + ' ' : '') + nw.name + bonusTxt;
         UI.pickupTitle.style.color = ns.bonus > 0 ? ns.color : nw.color;
-        const dmgVal = Math.round(nw.dmg * (1 + ns.bonus) * nw.pellets);
-        UI.pickupSub.textContent = `TIER ${nw.tier} · DMG ${dmgVal} · MAG ${nw.mag}`;
+        if (nw.explosive) {
+          const blastVal = Math.round((nw.splashDmg || 0) * (1 + ns.bonus));
+          const directVal = Math.round(((nw.splashDmg || 0) + nw.dmg) * (1 + ns.bonus));
+          UI.pickupSub.textContent = `TIER ${nw.tier} · BLAST ${blastVal} (${directVal} HIT) · MAG ${nw.mag}`;
+        } else if (nw.spinUp) {
+          UI.pickupSub.textContent = `TIER ${nw.tier} · ${nw.rpm} RPM · MAG ${nw.mag}`;
+        } else {
+          const dmgVal = Math.round(nw.dmg * (1 + ns.bonus) * nw.pellets);
+          UI.pickupSub.textContent = `TIER ${nw.tier} · DMG ${dmgVal} · MAG ${nw.mag}`;
+        }
       } else if (np.kind === 'gadget') {
         const g = GADGETS[np.gadget] || GADGETS.frag;
         UI.pickupPrompt.classList.remove('upgrade');
@@ -2559,7 +2885,8 @@ function updateHUD() {
     hudCache.mag = player.mag;
     UI.mag.textContent = String(player.mag);
   }
-  const ammoLow = player.mag <= Math.ceil(WEAPONS[player.weapon].mag * 0.25);
+  const curMagCap = WEAPONS[player.weapon].mag;
+  const ammoLow = player.mag === 0 || (curMagCap > 1 && player.mag <= Math.ceil(curMagCap * 0.25));
   if (ammoLow !== hudCache.ammoLow) {
     hudCache.ammoLow = ammoLow;
     UI.mag.classList.toggle('low', ammoLow);

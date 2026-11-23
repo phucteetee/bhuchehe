@@ -170,6 +170,8 @@ body.in-game #ui{opacity:1}
 #hudBuff{display:block;margin-top:4px;font-size:8px;letter-spacing:.16em;color:#6f8b96;font-weight:700}
 #hudBuff.cyan{color:var(--cyan)}
 #hudBuff.gold{color:#ffd166}
+#hudBuff.amber{color:var(--amber)}
+#hudBuff.red{color:var(--red)}
 #hudBuff.green{color:#7bf5c1}
 #hudBuff.purple{color:#d3a6ff}
 .statRow{display:grid;grid-template-columns:28px 1fr 34px;align-items:center;

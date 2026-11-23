@@ -94,6 +94,10 @@ const CHALLENGE_POOL = [
     name: 'Get 3 Rifle/Pulse/DMR elims',
   },
   {
+    id: 'heavyKills', group: 'weapon', metric: 'heavyKills', goal: 2, reward: 350,
+    name: 'Get 2 Heavy (LMG/Minigun/Bazooka) elims',
+  },
+  {
     id: 'top5', group: 'rank', metric: 'top5', goal: 1, reward: 300,
     name: 'Finish in the top 5',
   },

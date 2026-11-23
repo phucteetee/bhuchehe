@@ -29,6 +29,14 @@ function spawnBullet(opts) {
   b.hitId = 0;
   b.beam = !!opts.beam;
   b.knockback = opts.knockback || 0;
+  b.explosive = !!opts.explosive;
+  b.splashDmg = opts.splashDmg || 0;
+  b.splashRadius = opts.splashRadius || 0;
+  b.selfDmgMul = opts.selfDmgMul != null ? opts.selfDmgMul : 0.55;
+  b.accel = opts.accel || 0;
+  b.maxSpeed = opts.maxSpeed || 0;
+  b.crateDmgMul = opts.crateDmgMul || 1;
+  b.smokeT = 0;
   return b;
 }
 
@@ -172,6 +180,11 @@ function makeEntity(opts) {
     burstLeft: 0,
     burstT: 0,
     burstAngle: 0,
+    spin: 0,
+    spinPhase: 0,
+    spinSoundT: 0,
+    heat: 0,
+    triggerHeld: false,
     bloom: 0,
     hitFlash: 0,
     weaponKick: 0,
@@ -424,6 +437,9 @@ function switchWeapon(slotIdx) {
   p.reloading = false;
   p.reloadT = 0;
   p.burstLeft = 0;
+  p.spin = 0;
+  p.heat = 0;
+  p.spinSoundT = 0;
   p.cooldown = Math.min(p.cooldown, 0.12);
   p.weaponChangeT = 0.22;
   sfx('swap');
@@ -439,6 +455,8 @@ function startReload(e) {
   e.reloadT = dur;
   e.reloadTotal = dur;
   e.burstLeft = 0;
+  e.spin = 0;
+  e.spinSoundT = 0;
   if (e.isPlayer) {
     const side = Math.random() < 0.5 ? -1 : 1;
     const ejectAngle = e.angle + side * Math.PI / 2;
@@ -505,6 +523,34 @@ function updateWeapon(e, dt) {
     e.boostVelY = 0;
   }
 
+  // Handle rotary barrel spin-up, spin-down & thermal heat decay (6-barrel Minigun).
+  const curWeapon = WEAPONS[e.weapon];
+  if (curWeapon && curWeapon.spinUp) {
+    const spooling = e.triggerHeld && e.alive && !e.reloading && e.jamT <= 0 && e.mag > 0;
+    if (spooling) {
+      e.spin = Math.min(1, (e.spin || 0) + dt / curWeapon.spinUp);
+      e.spinPhase = ((e.spinPhase || 0) + dt * (5 + e.spin * 29)) % TAU;
+      if (e.spin < 0.98) {
+        e.spinSoundT = (e.spinSoundT || 0) - dt;
+        if (e.spinSoundT <= 0) {
+          e.spinSoundT = 0.16;
+          sfx('minigunSpin', e.x, e.y);
+        }
+      }
+    } else {
+      e.spin = Math.max(0, (e.spin || 0) - dt / (curWeapon.spinDown || 0.85));
+      e.spinPhase = ((e.spinPhase || 0) + dt * e.spin * 26) % TAU;
+      e.spinSoundT = 0;
+    }
+    if (!spooling || e.spin < 1) {
+      e.heat = Math.max(0, (e.heat || 0) - dt * 0.48);
+    }
+  } else {
+    e.spin = 0;
+    e.heat = 0;
+    e.spinSoundT = 0;
+  }
+
   // Handle queued multi-shot bursts (Pulse AR).
   if (e.burstLeft > 0 && e.alive && !e.reloading && e.jamT <= 0) {
     e.burstT -= dt;
@@ -567,7 +613,10 @@ function fireRound(e, angle, isBurstFollowup = false) {
   const accent = skin.bonus > 0 ? skin.color : w.color;
   const tracer = skin.bonus > 0 ? skin.color : w.tracer;
   const moving = e.isPlayer && (Math.hypot(e.moveX || 0, e.moveY || 0) > 0.15);
-  const spread = (w.spread + (e.bloom || 0)) * (moving ? 1.55 : 0.92);
+  if (w.heatSpread) {
+    e.heat = Math.min(1, (e.heat || 0) + 0.024);
+  }
+  const spread = (w.spread + (e.bloom || 0) + (e.heat || 0) * (w.heatSpread || 0)) * (moving ? 1.55 : 0.92);
   e.bloom = Math.min(0.06, (e.bloom || 0) + w.spread * 0.35);
 
   const mx = e.x + Math.cos(angle) * (e.r + 16);
@@ -591,17 +640,40 @@ function fireRound(e, angle, isBurstFollowup = false) {
       pierce: w.pierce || 0,
       beam: !!w.beam,
       knockback: w.knockback || 0,
+      explosive: !!w.explosive,
+      splashDmg: (w.splashDmg || 0) * damageMul,
+      splashRadius: w.splashRadius || 0,
+      selfDmgMul: w.selfDmgMul != null ? w.selfDmgMul : 0.55,
+      accel: w.rocketAccel || 0,
+      maxSpeed: w.rocketMaxSpeed || w.speed,
+      crateDmgMul: w.crateDmgMul || 1,
     }));
   }
 
   const gfx = getGraphicsSettings();
   const flashScale = w.model === 'shotgun' ? 1.55
+    : w.model === 'bazooka' ? 1.95
     : (w.model === 'sniper' || w.model === 'railgun') ? 1.75
+    : w.model === 'minigun' ? 1.15
     : w.model === 'lmg' ? 1.18
     : w.model === 'smg' ? 0.85 : 1;
   spawnParticle('flash', flashX, flashY, 0, 0, 0.06, 0.06, 13 * flashScale,
     skin.bonus > 0 ? accent : '#ffe9b0', 0, angle);
 
+  if (w.explosive) {
+    // Authentic bazooka rear backblast flame & exhaust plume
+    const backX = e.x - Math.cos(angle) * (e.r + 12);
+    const backY = e.y - Math.sin(angle) * (e.r + 12);
+    spawnParticle('flash', backX, backY, 0, 0, 0.1, 0.1, 18, '#ff9f45', 0, angle + Math.PI);
+    spawnParticle('shock', flashX, flashY, 0, 0, 0.22, 0.22, 36, accent, 0);
+    const backPuffs = gfx.fx >= 1 ? 5 : 2;
+    for (let i = 0; i < backPuffs; i++) {
+      const ba = angle + Math.PI + rand(-0.44, 0.44);
+      const sp = rand(95, 240);
+      spawnParticle('smoke', backX, backY, Math.cos(ba) * sp, Math.sin(ba) * sp,
+        rand(0.35, 0.65), 0.65, rand(6, 12), '#98a6ad', 3.5);
+    }
+  }
   if (w.pellets > 1 && gfx.fx >= 1) {
     spawnParticle('flash', flashX, flashY, 0, 0, 0.05, 0.05, 8 * flashScale,
       accent, 0, angle + Math.PI / 2);
@@ -609,18 +681,19 @@ function fireRound(e, angle, isBurstFollowup = false) {
   if (e.isPlayer && (w.model === 'sniper' || w.model === 'railgun') && gfx.fx >= 1) {
     spawnParticle('shock', flashX, flashY, 0, 0, 0.22, 0.22, 34, accent, 0);
   }
-  if (e.isPlayer && gfx.fx >= 1) {
+  if (e.isPlayer && gfx.fx >= 1 && (w.model !== 'minigun' || Math.random() < 0.45)) {
     spawnParticle('muzzleRing', flashX, flashY, 0, 0, 0.11, 0.11,
-      w.model === 'shotgun' ? 28 : 19, accent, 0, angle);
+      w.model === 'shotgun' || w.model === 'bazooka' ? 28 : 19, accent, 0, angle);
   }
-  const sparkCount = gfx.fx >= 1 ? 3 : 1;
+  const sparkCount = w.model === 'minigun' ? (gfx.fx >= 1 ? 2 : 1) : (gfx.fx >= 1 ? 3 : 1);
   for (let i = 0; i < sparkCount; i++) {
     const a = angle + rand(-0.4, 0.4);
     const speed = rand(120, 340);
     spawnParticle('spark', flashX, flashY, Math.cos(a) * speed, Math.sin(a) * speed,
       rand(0.08, 0.17), 0.17, rand(1, 2.2), accent, 6);
   }
-  if (e.isPlayer && gfx.fx >= 1 && Math.random() < 0.78) {
+  const casingChance = w.explosive ? 0 : (w.model === 'minigun' ? 0.5 : 0.78);
+  if (e.isPlayer && gfx.fx >= 1 && Math.random() < casingChance) {
     const side = Math.random() < 0.5 ? -1 : 1;
     const ejectAngle = angle + side * Math.PI / 2;
     spawnParticle('casing', e.x + Math.cos(ejectAngle) * 8, e.y + Math.sin(ejectAngle) * 8,
@@ -628,7 +701,8 @@ function fireRound(e, angle, isBurstFollowup = false) {
       Math.sin(ejectAngle) * rand(70, 125) - Math.sin(angle) * 28,
       0.46, 0.46, rand(2.4, 3.1), '#ffc96b', 4, angle);
   }
-  if (e.isPlayer && gfx.fx >= 2 && !REDUCED_MOTION && Math.random() < 0.28) {
+  if (e.isPlayer && gfx.fx >= 2 && !REDUCED_MOTION &&
+      (Math.random() < 0.28 || (w.model === 'minigun' && (e.heat || 0) > 0.55 && Math.random() < 0.3))) {
     spawnParticle('smoke', flashX, flashY,
       Math.cos(angle) * rand(18, 50) + rand(-14, 14),
       Math.sin(angle) * rand(18, 50) + rand(-14, 14),
@@ -637,7 +711,8 @@ function fireRound(e, angle, isBurstFollowup = false) {
 
   if (e.isPlayer) {
     game.shake = Math.max(game.shake, w.kick);
-    kickCamera(-Math.cos(angle) * w.kick * 0.72, -Math.sin(angle) * w.kick * 0.72);
+    const kickScale = w.model === 'minigun' ? 0.45 : 0.72;
+    kickCamera(-Math.cos(angle) * w.kick * kickScale, -Math.sin(angle) * w.kick * kickScale);
   } else {
     addGunPing(e.x, e.y);
   }
@@ -654,6 +729,7 @@ function tryFire(e, angle) {
     startReload(e);
     return false;
   }
+  if (w.spinUp && (e.spin || 0) < 1) return false;
   const botRate = getGameMode().id === 'hardcore' ? 1.85 : 2.15;
   e.cooldown = (60 / w.rpm) * (e.isPlayer ? 1 : botRate);
   if (w.burstCount && w.burstCount > 1) {
@@ -719,7 +795,14 @@ function tryUseGadget() {
   throwGadget(p, tx, ty);
 }
 
-function explodeArea(x, y, radius, maxDmg, source, tag = 'BLAST') {
+function explodeArea(x, y, radius, maxDmg, source, tag = 'BLAST', opts = {}) {
+  const selfMul = opts.selfDmgMul != null ? opts.selfDmgMul : 0.55;
+  const crateMul = opts.crateDmgMul != null ? opts.crateDmgMul : 1.15;
+  const kbForce = opts.knockback != null ? opts.knockback : 320;
+  const directTarget = opts.directTarget || null;
+  const directDmg = opts.directDmg || 0;
+  const shotDist = opts.dist != null ? opts.dist : null;
+
   sfx('explosion', x, y);
   spawnDecal('scorch', x, y, radius * 0.42, '#0a090c', 0.62, rand(0, TAU));
   spawnParticle('wave', x, y, 0, 0, 0.5, 0.5, radius * 1.15, '#ff9f45', 0);
@@ -748,20 +831,31 @@ function explodeArea(x, y, radius, maxDmg, source, tag = 'BLAST') {
     if (pd < 700) game.shake = Math.max(game.shake, (1 - pd / 700) * 11);
   }
 
-  // Damage entities in blast radius with falloff & knockback.
+  // Damage entities in blast radius with falloff, direct-hit bonus & knockback.
+  let splashHitEnemy = false;
   const r2 = radius * radius;
   for (const e of allEntities()) {
     if (!e.alive) continue;
+    const isDirect = !!(directTarget && e === directTarget);
     const dx = e.x - x;
     const dy = e.y - y;
     const d2 = dx * dx + dy * dy;
-    if (d2 > r2) continue;
+    if (!isDirect && d2 > r2) continue;
     const d = Math.sqrt(d2) || 1;
-    const falloff = clamp(1 - (d / radius) * 0.72, 0.28, 1);
-    const dmg = maxDmg * falloff * (e === source ? 0.55 : 1);
-    e.boostVelX += (dx / d) * 320 * falloff;
-    e.boostVelY += (dy / d) * 320 * falloff;
-    damage(e, dmg, source, { weapon: tag, dist: d, blast: true });
+    const falloff = isDirect ? 1 : clamp(1 - (d / radius) * 0.72, 0.28, 1);
+    const dmg = (isDirect ? (maxDmg + directDmg) : (maxDmg * falloff)) * (e === source ? selfMul : 1);
+    e.boostVelX += (dx / d) * kbForce * falloff;
+    e.boostVelY += (dy / d) * kbForce * falloff;
+    if (source === player && e !== player) splashHitEnemy = true;
+    damage(e, dmg, source, {
+      weapon: tag,
+      dist: shotDist != null ? shotDist : d,
+      blast: true,
+      directHit: isDirect,
+    });
+  }
+  if (opts.countSplashHit && !directTarget && splashHitEnemy && source === player) {
+    player.shotsHit++;
   }
 
   // Shatter nearby destructible crates.
@@ -772,7 +866,7 @@ function explodeArea(x, y, radius, maxDmg, source, tag = 'BLAST') {
     const cx = o.x + o.w / 2;
     const cy = o.y + o.h / 2;
     if (distance(x, y, cx, cy) <= radius + Math.max(o.w, o.h) * 0.45) {
-      damageObstacle(o, maxDmg * 1.15, source);
+      damageObstacle(o, maxDmg * crateMul, source);
     }
   }
 
@@ -1030,6 +1124,8 @@ function tryDash() {
   p.dashDur = 0.18;
   p.dashT = p.dashDur;
   p.dashCd = DASH_COOLDOWN * (p.dashCdMul || 1);
+  // Dashing briefly disrupts rotary spin-up to keep heavy firepower counterable.
+  if (p.spin > 0) p.spin = Math.max(0, p.spin - 0.45);
   // Launch stretch along movement axis for crisp kinetic punch.
   p.scaleX = 1.24;
   p.scaleY = 0.8;
@@ -1052,6 +1148,7 @@ function tryDash() {
 function updatePlayer(dt) {
   const p = player;
   if (!p) return;
+  p.triggerHeld = !!(p.alive && mouse.down && game.state === 'playing' && !p.reloading && p.jamT <= 0 && p.mag > 0);
   updateWeapon(p, dt);
   if (p.streakT > 0) {
     p.streakT = Math.max(0, p.streakT - dt);
@@ -1096,13 +1193,18 @@ function updatePlayer(dt) {
   const slowMul = p.slowT > 0 ? 0.62 : 1;
   const boostMul = p.speedBoostT > 0 ? 1.18 : 1;
   const sprint = 1.32;
+  const curW = WEAPONS[p.weapon];
+  const baseMoveMul = curW && curW.moveMul ? curW.moveMul : 1;
+  const weaponMoveMul = curW && curW.firingMoveMul && (p.spin || 0) > 0.12
+    ? lerp(baseMoveMul, curW.firingMoveMul, p.spin)
+    : baseMoveMul;
 
   // Smooth exponential acceleration & deceleration — tight response, zero jarring snaps.
   let targetVx = 0;
   let targetVy = 0;
   if (dx || dy) {
     const l = Math.hypot(dx, dy);
-    const maxSpeed = p.speed * sprint * slowMul * boostMul;
+    const maxSpeed = p.speed * sprint * slowMul * boostMul * weaponMoveMul;
     targetVx = (dx / l) * maxSpeed;
     targetVy = (dy / l) * maxSpeed;
   }
@@ -1289,8 +1391,6 @@ function findBotCover(b, threat) {
 }
 
 function findIncomingBullet(e) {
-  const radius = e.r + 11;
-  const radius2 = radius * radius;
   for (let i = 0; i < bullets.length; i++) {
     const bullet = bullets[i];
     if (bullet.owner === e) continue;
@@ -1299,10 +1399,12 @@ function findIncomingBullet(e) {
     const rx = e.x - bullet.x;
     const ry = e.y - bullet.y;
     const time = (rx * bullet.vx + ry * bullet.vy) / speed2;
-    if (time <= 0 || time > 0.18) continue;
+    const horizon = bullet.explosive ? 0.38 : 0.18;
+    if (time <= 0 || time > horizon) continue;
+    const radius = e.r + (bullet.explosive ? 38 : 11);
     const dx = rx - bullet.vx * time;
     const dy = ry - bullet.vy * time;
-    if (dx * dx + dy * dy <= radius2) return bullet;
+    if (dx * dx + dy * dy <= radius * radius) return bullet;
   }
   return null;
 }
@@ -1529,12 +1631,16 @@ function updateBot(b, dt) {
 
   const ndl = Math.hypot(dx, dy);
   const slowMul = b.slowT > 0 ? 0.58 : 1;
+  const baseMoveMul = w.moveMul || 1;
+  const weaponMoveMul = w.firingMoveMul && (b.spin || 0) > 0.12
+    ? lerp(baseMoveMul, w.firingMoveMul, b.spin)
+    : baseMoveMul;
   let targetVx = 0;
   let targetVy = 0;
   if (ndl > 0.01) {
     dx /= ndl;
     dy /= ndl;
-    const sp = (dashing ? 780 : b.speed) * (inStorm ? 1.28 : 1) * slowMul;
+    const sp = (dashing ? 780 : b.speed * weaponMoveMul) * (inStorm ? 1.28 : 1) * slowMul;
     targetVx = dx * sp;
     targetVy = dy * sp;
   }
@@ -1563,21 +1669,26 @@ function updateBot(b, dt) {
 
   // Aim & shoot
   if (b.firePause > 0) b.firePause -= dt;
+  b.triggerHeld = false;
   const lateGame = zone.phase >= 2;
   const baseRange = lateGame || b.role === 'hunter' ? 290 + b.aggression * 155 : 240;
   const fireRange = Math.min(w.range, Math.max(baseRange, w.pref));
+  const safeRocketDist = w.explosive ? (w.splashRadius || 138) * 1.12 : 0;
   if (t && t.alive && targetDist < fireRange && botLOS(b, t)) {
     const aim = Math.atan2(t.y - b.y, t.x - b.x);
     const turn = 5.8 * dt;
     b.angle += clamp(angleDiff(b.angle, aim), -turn, turn);
     b.reactT = Math.max(0, b.reactT - dt);
-    if (b.reactT <= 0 && b.firePause <= 0 && b.jamT <= 0 && Math.abs(angleDiff(b.angle, aim)) < 0.22) {
+    const aligned = Math.abs(angleDiff(b.angle, aim)) < 0.22;
+    const canEngage = b.reactT <= 0 && b.firePause <= 0 && b.jamT <= 0 && aligned && targetDist >= safeRocketDist;
+    if (canEngage) {
+      b.triggerHeld = true;
       const err = b.aimErr * (0.7 + targetDist / 700);
       if (tryFire(b, b.angle + rand(-err, err))) {
         b.burst--;
         if (b.burst <= 0) {
-          b.firePause = rand(1.2, 2.3);
-          b.burst = randInt(2, 4);
+          b.firePause = w.explosive ? rand(1.6, 2.4) : rand(1.2, 2.3);
+          b.burst = w.spinUp ? randInt(12, 22) : (w.explosive ? 1 : randInt(2, 4));
         }
       }
     }
@@ -1594,9 +1705,29 @@ function updateBot(b, dt) {
 function updateBullets(dt) {
   for (let i = bullets.length - 1; i >= 0; i--) {
     const b = bullets[i];
-    const speed = Math.hypot(b.vx, b.vy) || 1;
+    let speed = Math.hypot(b.vx, b.vy) || 1;
     const ux = b.vx / speed;
     const uy = b.vy / speed;
+    if (b.accel > 0 && speed < b.maxSpeed) {
+      speed = Math.min(b.maxSpeed, speed + b.accel * dt);
+      b.vx = ux * speed;
+      b.vy = uy * speed;
+    }
+    if (b.explosive) {
+      b.smokeT = (b.smokeT || 0) - dt;
+      if (b.smokeT <= 0) {
+        const fx = getGraphicsSettings().fx;
+        b.smokeT = fx >= 1 ? 0.022 : 0.045;
+        spawnParticle('smoke', b.x - ux * 10, b.y - uy * 10,
+          -ux * rand(24, 65) + rand(-18, 18), -uy * rand(24, 65) + rand(-18, 18),
+          rand(0.28, 0.52), 0.52, rand(4.5, 8.5), '#95a3ab', 3);
+        if (fx >= 1) {
+          spawnParticle('spark', b.x - ux * 11, b.y - uy * 11,
+            -ux * rand(60, 140) + rand(-35, 35), -uy * rand(60, 140) + rand(-35, 35),
+            rand(0.08, 0.16), 0.16, rand(1.4, 2.4), '#ffbe55', 5);
+        }
+      }
+    }
     const remaining = speed * dt;
     const steps = Math.max(1, Math.ceil(remaining / 18));
     const stepLen = remaining / steps;
@@ -1627,13 +1758,29 @@ function updateBullets(dt) {
         }
       }
       if (hit) {
+        if (b.explosive) {
+          b.x = nx;
+          b.y = ny;
+          explodeArea(nx, ny, b.splashRadius, b.splashDmg, b.owner, b.weapon, {
+            directTarget: hit,
+            directDmg: b.dmg,
+            selfDmgMul: b.selfDmgMul,
+            crateDmgMul: b.crateDmgMul,
+            knockback: b.knockback,
+            dist: b.travelled + stepLen * 0.5,
+            countSplashHit: true,
+          });
+          done = true;
+          break;
+        }
         // Skill-rewarding Crit detection: direct center-line hit or precision crit roll.
         const perp = Math.abs((hit.x - b.x) * uy - (hit.y - b.y) * ux);
         const w = WEAPONS[b.weapon];
-        const canCrit = b.owner === player || (b.owner && b.owner.elite);
+        const canCrit = (b.owner === player || (b.owner && b.owner.elite)) && (!w || w.canCrit !== false);
         const critChance = (w ? w.critBonus || 0 : 0) + (b.owner ? b.owner.critBonus || 0 : 0);
         const isCrit = canCrit && (w && w.pellets === 1) && (perp < hit.r * 0.34 || Math.random() < critChance);
-        const finalDmg = isCrit ? b.dmg * 1.42 : b.dmg;
+        const critMul = (w && w.critMul) || 1.42;
+        const finalDmg = isCrit ? b.dmg * critMul : b.dmg;
 
         if (b.knockback) {
           hit.boostVelX += ux * b.knockback * 4.5;
@@ -1666,10 +1813,20 @@ function updateBullets(dt) {
         if (Math.abs(bar.x - b.x) > bar.r + stepLen + 2 ||
             Math.abs(bar.y - b.y) > bar.r + stepLen + 2) continue;
         if (segCircle(b.x, b.y, nx, ny, bar.x, bar.y, bar.r)) {
-          spawnHitSparks(nx, ny, '#ff9f45');
-          damageBarrel(bar, b.dmg, b.owner);
           b.x = nx;
           b.y = ny;
+          if (b.explosive) {
+            explodeArea(nx, ny, b.splashRadius, b.splashDmg, b.owner, b.weapon, {
+              selfDmgMul: b.selfDmgMul,
+              crateDmgMul: b.crateDmgMul,
+              knockback: b.knockback,
+              dist: b.travelled + stepLen * 0.5,
+              countSplashHit: true,
+            });
+          } else {
+            spawnHitSparks(nx, ny, '#ff9f45');
+            damageBarrel(bar, b.dmg, b.owner);
+          }
           done = true;
           break;
         }
@@ -1683,10 +1840,21 @@ function updateBullets(dt) {
       // 3. Check Spatial Grid obstacles (including destructible crates!)
       const obs = findObstacleAtPoint(b.x, b.y, 0);
       if (obs) {
+        if (b.explosive) {
+          explodeArea(b.x, b.y, b.splashRadius, b.splashDmg, b.owner, b.weapon, {
+            selfDmgMul: b.selfDmgMul,
+            crateDmgMul: b.crateDmgMul,
+            knockback: b.knockback,
+            dist: b.travelled,
+            countSplashHit: true,
+          });
+          done = true;
+          break;
+        }
         spawnHitSparks(b.x, b.y, obs.type === 'crate' ? '#c99b63' : '#b7c7cf');
         spawnDecal('chip', b.x, b.y, rand(2.5, 4.5), '#080c10', 0.55, b.angle);
         if (obs.destructible) {
-          damageObstacle(obs, b.dmg, b.owner);
+          damageObstacle(obs, b.dmg * (b.crateDmgMul || 1), b.owner);
         }
         if (b.pierce > 0 && obs.destructible && obs.destroyed) {
           b.pierce--;
@@ -1696,6 +1864,15 @@ function updateBullets(dt) {
         }
       }
       if (b.travelled >= b.maxDist) {
+        if (b.explosive) {
+          explodeArea(b.x, b.y, b.splashRadius, b.splashDmg, b.owner, b.weapon, {
+            selfDmgMul: b.selfDmgMul,
+            crateDmgMul: b.crateDmgMul,
+            knockback: b.knockback,
+            dist: b.travelled,
+            countSplashHit: true,
+          });
+        }
         done = true;
         break;
       }
@@ -1764,22 +1941,23 @@ function damage(target, amount, source, opts = {}) {
 
   if (source === player && target !== player && !opts.storm) {
     player.damageDealt += dmg;
-    if (!opts.blast) player.shotsHit++;
+    if (!opts.blast || opts.directHit) player.shotsHit++;
     if (opts.crit) player.crits++;
     if (typeof track === 'function') track('damage', dmg);
   }
 
   if (source === player && target !== player) {
-    game.hitmarker = opts.crit ? 0.2 : 0.14;
+    game.hitmarker = opts.crit || opts.directHit ? 0.2 : 0.14;
     game.hitmarkerTotal = game.hitmarker;
     game.hitmarkerKill = false;
-    game.hitmarkerCrit = !!opts.crit;
+    game.hitmarkerCrit = !!(opts.crit || opts.directHit);
     if (!opts.silent && dmg >= 1) {
-      const txt = opts.crit ? Math.round(dmg) + '!' : String(Math.round(dmg));
-      const col = opts.crit ? '#ffd166' : (dmg >= 30 ? '#ffcf86' : '#ffffff');
-      spawnText(target.x + rand(-7, 7), target.y - target.r - 4, txt, col, opts.crit ? 17 : 14, opts.crit ? 0.95 : 0.8);
+      const txt = opts.crit || opts.directHit ? Math.round(dmg) + '!' : String(Math.round(dmg));
+      const col = opts.crit ? '#ffd166' : opts.directHit ? '#ff9f45' : (dmg >= 30 ? '#ffcf86' : '#ffffff');
+      spawnText(target.x + rand(-7, 7), target.y - target.r - 4, txt, col,
+        opts.crit || opts.directHit ? 17 : 14, opts.crit || opts.directHit ? 0.95 : 0.8);
     }
-    sfx(opts.crit ? 'crit' : 'hit', target.x, target.y);
+    sfx(opts.crit || opts.directHit ? 'crit' : 'hit', target.x, target.y);
   }
   if (target === player && !opts.storm) {
     game.hurt = Math.min(1, game.hurt + amount / 55);
@@ -1805,6 +1983,9 @@ function killEntity(e, source, byStorm, info = {}) {
   e.hp = 0;
   e.reloading = false;
   e.burstLeft = 0;
+  e.spin = 0;
+  e.heat = 0;
+  e.triggerHeld = false;
 
   if (source && source !== e) source.kills++;
   if (source === player && e !== player) {
@@ -1845,6 +2026,7 @@ function killEntity(e, source, byStorm, info = {}) {
       if (weapon === 'sniper' || weapon === 'railgun') track('sniperKills', 1);
       else if (weapon === 'shotgun') track('shotgunKills', 1);
       else if (weapon === 'rifle' || weapon === 'dmr' || weapon === 'pulse') track('rifleKills', 1);
+      else if (weapon === 'lmg' || weapon === 'minigun' || weapon === 'bazooka') track('heavyKills', 1);
       if (dist >= 900) track('longshot', 1);
     }
   }
@@ -1881,9 +2063,12 @@ function dropLoot(e) {
   if (Math.random() < 0.55) {
     drop({ kind: 'weapon', weapon: e.weapon, skin: e.skin });
   } else {
+    const dropPool = e.elite
+      ? ['rifle', 'pulse', 'dmr', 'lmg', 'sniper', 'minigun', 'bazooka', 'railgun']
+      : ['smg', 'shotgun', 'revolver', 'rifle', 'pulse', 'dmr', 'lmg', 'sniper'];
     drop({
       kind: 'weapon',
-      weapon: pick(['smg', 'shotgun', 'revolver', 'rifle', 'pulse', 'dmr', 'lmg', 'sniper']),
+      weapon: pick(dropPool),
       skin: randomSkin(e.elite ? 1.5 : 0.2),
     });
   }
@@ -1906,7 +2091,13 @@ function equipWeaponToEntity(e, p, slotIdx) {
     e.reloading = false;
     e.reloadT = 0;
     e.burstLeft = 0;
+    e.spin = 0;
+    e.heat = 0;
+    e.spinSoundT = 0;
     e.weaponChangeT = 0.26;
+    if (!e.isPlayer) {
+      e.burst = next.spinUp ? randInt(12, 22) : (next.explosive ? 1 : randInt(2, 4));
+    }
   }
   if (e.isPlayer) {
     if (nextSkin.bonus > 0) {
@@ -2197,7 +2388,9 @@ function updateSupplyDrop(dt) {
     }
   }
 
-  const weapons = zone.phase >= 3 ? ['railgun', 'sniper', 'lmg'] : ['railgun', 'dmr', 'pulse', 'lmg'];
+  const weapons = zone.phase >= 3
+    ? ['railgun', 'bazooka', 'minigun', 'sniper', 'lmg']
+    : ['railgun', 'bazooka', 'minigun', 'dmr', 'pulse', 'lmg'];
   const skin = randomSkin(4.2);
   const addSupply = (def, ox = 0, oy = 0) => {
     pickups.push({
