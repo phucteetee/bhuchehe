@@ -129,6 +129,7 @@ function startMatch() {
 
   document.body.classList.add('in-game', 'playing');
   setMusicMood('battle');
+  if (typeof updateAudioMix === 'function') updateAudioMix();
   updateHUD();
 }
 
@@ -157,6 +158,7 @@ function showEnd(win) {
   clearCountdownHide();
   resetInput();
   setMusicMood('menu');
+  if (typeof updateAudioMix === 'function') updateAudioMix();
   if (UI.streakBanner) UI.streakBanner.classList.remove('show');
   if (UI.pickupPrompt) UI.pickupPrompt.classList.add('hidden');
   if (UI.interactTouch) UI.interactTouch.classList.add('hidden');
@@ -249,6 +251,8 @@ function quitToMenu() {
   game.matchTime = 0;
   game.nearPickup = null;
   resetInput();
+  setMusicMood('menu');
+  if (typeof updateAudioMix === 'function') updateAudioMix();
   setupBackdrop();
   if (typeof invalidateRenderCaches === 'function') invalidateRenderCaches();
   document.body.classList.remove('in-game', 'playing');
@@ -280,6 +284,7 @@ function togglePause() {
     UI.toast.className = '';
     document.body.classList.remove('playing');
     UI.pause.classList.remove('hidden');
+    if (typeof updateAudioMix === 'function') updateAudioMix();
   } else if (game.state === 'paused') {
     const resumeState = game.pausedFrom === 'countdown' ? 'countdown' : 'playing';
     game.state = resumeState;
@@ -291,6 +296,7 @@ function togglePause() {
     highFpsWindows = 0;
     document.body.classList.add('playing');
     UI.pause.classList.add('hidden');
+    if (typeof updateAudioMix === 'function') updateAudioMix();
   }
 }
 

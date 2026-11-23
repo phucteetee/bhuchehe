@@ -147,19 +147,19 @@ const GADGETS = {
 const GAME_MODES = {
   classic: {
     id: 'classic', players: 20, stormSpeed: 1.0, lootLuck: 0.0,
-    eliteChance: 0.2, supplyFirst: 55, supplyGap: 72, auraMul: 1.0,
+    eliteChance: 0.2, supplyFirst: 42, supplyGap: 58, auraMul: 1.0,
     name: 'ROYALE',
     desc: '20 operators · Classic storm & supply caches',
   },
   blitz: {
     id: 'blitz', players: 16, stormSpeed: 1.48, lootLuck: 1.6,
-    eliteChance: 0.26, supplyFirst: 32, supplyGap: 48, auraMul: 1.15,
+    eliteChance: 0.26, supplyFirst: 26, supplyGap: 42, auraMul: 1.15,
     name: 'BLITZ',
     desc: '16 operators · Fast storm, rarer skins, 1.15× AURA',
   },
   hardcore: {
     id: 'hardcore', players: 20, stormSpeed: 1.15, lootLuck: 1.0,
-    eliteChance: 0.45, supplyFirst: 48, supplyGap: 64, auraMul: 1.6,
+    eliteChance: 0.45, supplyFirst: 36, supplyGap: 52, auraMul: 1.6,
     name: 'ELITE OPS',
     desc: 'Deadlier AI & 45% Elites · High risk, 1.6× AURA',
   },
@@ -794,24 +794,67 @@ try {
 
 let actx = null;
 let master = null;
+let masterWarmth = null;
+let masterLimiter = null;
 let sfxGain = null;
 let musicGain = null;
+let musicFilter = null;
+let reverbSend = null;
+let reverbNode = null;
+let reverbWet = null;
 let noiseBuffer = null;
 let audioMuted = false;
 
 const SFX_LAST = Object.create(null);
 const SFX_GAP = {
-  pistol: 45, smg: 48, shotgun: 70, revolver: 60, rifle: 55,
+  pistol: 45, smg: 46, shotgun: 70, revolver: 60, rifle: 55,
   pulse: 42, dmr: 55, lmg: 48, sniper: 80, railgun: 95,
-  minigun: 42, minigunSpin: 150, bazooka: 120,
-  hit: 38, crit: 55, hurt: 140, kill: 110, streak: 200, aura: 120,
-  ui: 40, armor: 120, explosion: 90, emp: 120, smoke: 120,
-  bounce: 60, boost: 180, crateBreak: 70, swap: 75, throw: 90,
+  minigun: 42, minigunSpin: 140, bazooka: 120,
+  hit: 36, crit: 52, hurt: 140, kill: 110, streak: 200, aura: 120,
+  ui: 40, armor: 120, explosion: 85, emp: 120, smoke: 120,
+  bounce: 65, boost: 180, crateBreak: 70, swap: 75, throw: 90,
 };
 
+function createArenaImpulse(ac) {
+  const dur = 0.68;
+  const len = Math.floor(ac.sampleRate * dur);
+  const buf = ac.createBuffer(2, len, ac.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const data = buf.getChannelData(ch);
+    let lp = 0;
+    for (let i = 0; i < len; i++) {
+      const t = i / len;
+      const env = Math.pow(1 - t, 2.8);
+      const white = Math.random() * 2 - 1;
+      // Progressive high-frequency air damping for natural tactical arena space
+      lp = lp * (0.42 + t * 0.48) + white * (0.58 - t * 0.48);
+      data[i] = lp * env;
+    }
+  }
+  return buf;
+}
+
+function updateAudioMix() {
+  if (!actx) return;
+  const now = actx.currentTime;
+  const paused = typeof game !== 'undefined' && game && game.state === 'paused';
+  if (master) {
+    const targetMaster = audioMuted ? 0 : (audioSettings.volume / 100) * 0.78;
+    master.gain.setTargetAtTime(targetMaster, now, 0.03);
+  }
+  if (musicGain) {
+    const moodMul = paused ? 0.32 : musicMood === 'menu' ? 0.7 : 0.85;
+    const targetMusic = audioSettings.music && !audioMuted ? moodMul : 0;
+    musicGain.gain.setTargetAtTime(targetMusic, now, 0.08);
+  }
+  if (musicFilter) {
+    const targetCut = paused ? 480 : musicMood === 'menu' ? 2100 : musicMood === 'final' ? 12500 : 8800;
+    musicFilter.frequency.setTargetAtTime(targetCut, now, 0.14);
+  }
+}
+
 function applyAudioSettings() {
-  if (master) master.gain.value = audioMuted ? 0 : (audioSettings.volume / 100) * 0.72;
-  if (musicGain) musicGain.gain.value = audioSettings.music ? 0.82 : 0;
+  updateAudioMix();
 }
 
 function saveAudioSettings() {
@@ -850,9 +893,10 @@ function setAudioVolume(value) {
 
 let audioUnlocked = false;
 function unlockAudio() {
-  if (audioUnlocked) return;
-  audioUnlocked = ensureAudio();
-  if (audioUnlocked) {
+  if (audioUnlocked && actx && actx.state === 'running') return;
+  const ok = ensureAudio();
+  if (ok && actx && actx.state === 'running') {
+    audioUnlocked = true;
     window.removeEventListener('pointerdown', unlockAudio);
     window.removeEventListener('keydown', unlockAudio);
   }
@@ -868,73 +912,171 @@ function ensureAudio() {
     actx = new AC();
     master = actx.createGain();
     master.gain.value = 0;
+
+    // Master warmth lowshelf + soft dynamics limiter (prevents clipping & adds punch)
+    let mixDest = master;
+    if (actx.createDynamicsCompressor) {
+      masterLimiter = actx.createDynamicsCompressor();
+      masterLimiter.threshold.value = -13;
+      masterLimiter.knee.value = 14;
+      masterLimiter.ratio.value = 6;
+      masterLimiter.attack.value = 0.003;
+      masterLimiter.release.value = 0.16;
+      masterLimiter.connect(master);
+      mixDest = masterLimiter;
+    }
+    if (actx.createBiquadFilter) {
+      masterWarmth = actx.createBiquadFilter();
+      masterWarmth.type = 'lowshelf';
+      masterWarmth.frequency.value = 115;
+      masterWarmth.gain.value = 2.6;
+      masterWarmth.connect(mixDest);
+      mixDest = masterWarmth;
+    }
+
     sfxGain = actx.createGain();
     sfxGain.gain.value = 1;
+    sfxGain.connect(mixDest);
+
     musicGain = actx.createGain();
     musicGain.gain.value = 0;
-    sfxGain.connect(master);
-    musicGain.connect(master);
+    if (actx.createBiquadFilter) {
+      musicFilter = actx.createBiquadFilter();
+      musicFilter.type = 'lowpass';
+      musicFilter.frequency.value = 2100;
+      musicFilter.Q.value = 0.7;
+      musicGain.connect(musicFilter);
+      musicFilter.connect(mixDest);
+    } else {
+      musicGain.connect(mixDest);
+    }
+
+    // Procedural stereo arena reverb bus
+    if (actx.createConvolver) {
+      try {
+        reverbSend = actx.createGain();
+        reverbSend.gain.value = 1;
+        reverbNode = actx.createConvolver();
+        reverbNode.buffer = createArenaImpulse(actx);
+        reverbWet = actx.createGain();
+        reverbWet.gain.value = 0.24;
+        reverbSend.connect(reverbNode);
+        reverbNode.connect(reverbWet);
+        reverbWet.connect(mixDest);
+        // Subtle ambient glue on music bus
+        const musicRev = actx.createGain();
+        musicRev.gain.value = 0.16;
+        (musicFilter || musicGain).connect(musicRev);
+        musicRev.connect(reverbSend);
+      } catch (e) {
+        reverbSend = null;
+      }
+    }
+
     master.connect(actx.destination);
-    const len = Math.floor(actx.sampleRate * 1.2);
+    const len = Math.floor(actx.sampleRate * 1.5);
     noiseBuffer = actx.createBuffer(1, len, actx.sampleRate);
     const data = noiseBuffer.getChannelData(0);
     for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
     musicNextNote = actx.currentTime + 0.08;
   }
-  if (actx.state === 'suspended') actx.resume();
+  if (actx.state === 'suspended') {
+    const p = actx.resume();
+    if (p && typeof p.then === 'function') {
+      p.then(() => {
+        if (actx && actx.state === 'running') {
+          audioUnlocked = true;
+          musicNextNote = actx.currentTime + 0.06;
+          updateAudioMix();
+        }
+      }).catch(() => {});
+    }
+  }
   applyAudioSettings();
   return true;
 }
 
-function routeAudio(node, bus, pan) {
+function routeAudio(node, bus, pan, reverbAmt = 0) {
+  const targetBus = bus || sfxGain || master;
+  let out = node;
   if (pan && actx.createStereoPanner) {
     const panner = actx.createStereoPanner();
     panner.pan.value = clamp(pan, -1, 1);
     node.connect(panner);
-    panner.connect(bus || sfxGain || master);
-  } else {
-    node.connect(bus || sfxGain || master);
+    out = panner;
+  }
+  out.connect(targetBus);
+  if (reverbAmt > 0 && reverbSend) {
+    const send = actx.createGain();
+    send.gain.value = reverbAmt;
+    out.connect(send);
+    send.connect(reverbSend);
   }
 }
 
-function tone(freq, dur, type = 'sine', vol = 0.15, slide = 0, when = 0, bus = null, pan = 0) {
+function tone(freq, dur, type = 'sine', vol = 0.15, slide = 0, when = 0, bus = null, pan = 0, opts = null) {
   if (!actx || audioMuted) return;
-  const t0 = actx.currentTime + when;
+  const t0 = actx.currentTime + Math.max(0, when);
   const osc = actx.createOscillator();
   const gain = actx.createGain();
   osc.type = type;
-  osc.frequency.setValueAtTime(freq, t0);
-  if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(24, freq + slide), t0 + dur);
+  const startFreq = Math.max(20, freq);
+  osc.frequency.setValueAtTime(startFreq, t0);
+  if (opts && opts.detune) osc.detune.setValueAtTime(opts.detune, t0);
+  if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, startFreq + slide), t0 + dur);
+  const atk = Math.min(dur * 0.4, (opts && opts.attack) || 0.005);
   gain.gain.setValueAtTime(0.0001, t0);
-  gain.gain.exponentialRampToValueAtTime(Math.max(0.001, vol), t0 + 0.006);
+  gain.gain.exponentialRampToValueAtTime(Math.max(0.001, vol), t0 + atk);
   gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-  osc.connect(gain);
-  routeAudio(gain, bus, pan);
+
+  let head = osc;
+  if (opts && opts.cutoff && actx.createBiquadFilter) {
+    const flt = actx.createBiquadFilter();
+    flt.type = opts.filterType || 'lowpass';
+    flt.frequency.setValueAtTime(opts.cutoff, t0);
+    if (opts.endCutoff) flt.frequency.exponentialRampToValueAtTime(Math.max(40, opts.endCutoff), t0 + dur);
+    if (opts.q) flt.Q.value = opts.q;
+    head.connect(flt);
+    head = flt;
+  }
+  head.connect(gain);
+  routeAudio(gain, bus, pan, opts && opts.reverb ? opts.reverb : 0);
   osc.start(t0);
-  osc.stop(t0 + dur + 0.03);
+  osc.stop(t0 + dur + 0.035);
 }
 
-function noiseBurst(dur, vol, cutoff = 1800, when = 0, bus = null, pan = 0) {
+function noiseBurst(dur, vol, cutoff = 1800, when = 0, bus = null, pan = 0, opts = null) {
   if (!actx || audioMuted || !noiseBuffer) return;
-  const t0 = actx.currentTime + when;
+  const t0 = actx.currentTime + Math.max(0, when);
   const src = actx.createBufferSource();
   src.buffer = noiseBuffer;
   const filter = actx.createBiquadFilter();
-  filter.type = 'lowpass';
-  filter.frequency.value = cutoff;
+  filter.type = (opts && opts.filterType) || 'lowpass';
+  filter.frequency.setValueAtTime(Math.max(40, cutoff), t0);
+  if (opts && opts.endCutoff) {
+    filter.frequency.exponentialRampToValueAtTime(Math.max(40, opts.endCutoff), t0 + dur);
+  }
+  if (opts && opts.q) filter.Q.value = opts.q;
   const gain = actx.createGain();
-  gain.gain.setValueAtTime(Math.max(0.001, vol), t0);
+  const atk = opts && opts.attack ? Math.min(dur * 0.4, opts.attack) : 0;
+  if (atk > 0.002) {
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(Math.max(0.001, vol), t0 + atk);
+  } else {
+    gain.gain.setValueAtTime(Math.max(0.001, vol), t0);
+  }
   gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
   src.connect(filter);
   filter.connect(gain);
-  routeAudio(gain, bus, pan);
-  src.start(t0);
-  src.stop(t0 + dur + 0.03);
+  routeAudio(gain, bus, pan, opts && opts.reverb ? opts.reverb : 0);
+  const offset = Math.random() * Math.max(0.05, noiseBuffer.duration - dur - 0.05);
+  src.start(t0, offset);
+  src.stop(t0 + dur + 0.035);
 }
 
 function spatialGain(x, y) {
-  if (x == null || !player || !player.alive) return 0.45;
-  return clamp(1 - distance(x, y, player.x, player.y) / 1550, 0.05, 1);
+  if (x == null || !player || !player.alive) return 0.55;
+  return clamp(1 - distance(x, y, player.x, player.y) / 1600, 0.06, 1);
 }
 
 function spatialPan(x) {
@@ -942,22 +1084,25 @@ function spatialPan(x) {
   return clamp((x - player.x) / 900, -1, 1);
 }
 
-/* ---- Procedural score ---- */
+/* ---- Procedural Tactical Electronic Score ---- */
 const MUSIC = {
   menu: {
-    bpm: 84, root: 110,
-    bass: [0, 0, 5, 3],
-    lead: [0, null, 7, null, 12, null, 7, null, 3, null, 10, null, 7, null, 5, null],
+    bpm: 92, root: 110,
+    bass: [0, 0, -4, -4, -2, -2, 3, 2],
+    chords: [[0, 3, 7], [-4, 0, 3], [-2, 2, 5], [3, 7, 10]],
+    lead: [0, null, 7, null, 12, null, 10, 7, 3, null, 7, null, 10, null, 5, null],
   },
   battle: {
-    bpm: 118, root: 110,
+    bpm: 122, root: 110,
     bass: [0, 0, 3, 0, 5, 3, 7, 5],
+    chords: [[0, 7, 12], [3, 7, 10], [5, 8, 12], [7, 10, 14]],
     lead: [0, 7, 12, 7, 3, 10, 7, 12, 5, 12, 10, 7, 3, 7, 10, 12],
   },
   final: {
-    bpm: 140, root: 98,
+    bpm: 142, root: 98,
     bass: [0, 0, 0, 3, 5, 5, 7, 10],
-    lead: [0, 12, 7, 12, 3, 12, 10, 12, 5, 12, 7, 12, 8, 12, 10, 12],
+    chords: [[0, 7, 15], [3, 10, 15], [5, 12, 17], [7, 14, 19]],
+    lead: [0, 12, 7, 12, 3, 12, 10, 12, 5, 12, 7, 12, 8, 12, 10, 15],
   },
 };
 let musicMood = 'menu';
@@ -969,46 +1114,97 @@ function setMusicMood(mood) {
     musicMood = mood;
     musicStep = 0;
     if (actx) musicNextNote = actx.currentTime + 0.06;
+    updateAudioMix();
   }
 }
 
 function scheduleMusicStep(step, when) {
+  if (!actx) return;
+  // Convert absolute AudioContext schedule time into a relative offset for tone()/noiseBurst().
+  const delay = Math.max(0, when - actx.currentTime);
   const m = MUSIC[musicMood];
   const s = step % 16;
+  const bar = (step >> 4) % m.chords.length;
   const root = m.root;
   const note = (semi, oct = 1) => root * oct * Math.pow(2, semi / 12);
-  if (s % 4 === 0) {
-    const semi = m.bass[(step >> 2) % m.bass.length];
-    tone(note(semi), 0.36, 'triangle', 0.12, 0, when, musicGain);
-    tone(note(semi, 0.5), 0.42, 'sine', 0.09, 0, when, musicGain);
+
+  // Atmospheric stereo synth pad on bar downbeat
+  if (s === 0) {
+    const chord = m.chords[bar];
+    const padDur = (60 / m.bpm) * 3.8;
+    const padVol = musicMood === 'menu' ? 0.032 : 0.024;
+    for (let i = 0; i < chord.length; i++) {
+      tone(note(chord[i], 1), padDur, 'triangle', padVol, 0, delay, musicGain, (i - 1) * 0.35, {
+        attack: 0.14, detune: i % 2 ? 6 : -6, cutoff: 1400,
+      });
+    }
   }
+
+  // Rhythmic sub-bass & filtered pulse bass
+  const bassHit = musicMood === 'menu' ? (s % 4 === 0)
+    : musicMood === 'final' ? (s % 2 === 0)
+    : (s % 4 === 0 || s === 6 || s === 14);
+  if (bassHit) {
+    const semi = m.bass[(step >> 2) % m.bass.length];
+    const dur = musicMood === 'final' ? 0.19 : 0.32;
+    const accent = s % 4 === 0 ? 1 : 0.65;
+    tone(note(semi, 0.5), dur + 0.06, 'sine', 0.11 * accent, 0, delay, musicGain);
+    tone(note(semi, 1), dur, 'sawtooth', 0.055 * accent, 0, delay, musicGain, 0, {
+      cutoff: musicMood === 'menu' ? 420 : 880, endCutoff: 220, q: 2.2,
+    });
+  }
+
+  // Arpeggiated tactical synth lead with subtle stereo ping-pong
   const lead = m.lead[s];
   if (lead != null) {
-    tone(note(lead, 2), 0.14, 'sine', musicMood === 'final' ? 0.05 : 0.038,
-      0, when, musicGain);
+    const leadPan = (s % 2 ? 0.24 : -0.24);
+    const leadVol = musicMood === 'final' ? 0.044 : musicMood === 'battle' ? 0.034 : 0.028;
+    tone(note(lead, 2), 0.16, musicMood === 'menu' ? 'sine' : 'triangle', leadVol, 0, delay, musicGain, leadPan, {
+      cutoff: 3200, endCutoff: 950,
+    });
   }
-  if (s % 4 === 2) noiseBurst(0.035, 0.014, 7000, when, musicGain);
-  if (s === 0 || s === 8 || (musicMood === 'final' && (s === 6 || s === 14))) {
-    tone(54, 0.13, 'sine', 0.2, -28, when, musicGain);
+
+  // Punchy kick drum
+  const kickHit = musicMood === 'menu'
+    ? (s === 0 || s === 10)
+    : (s === 0 || s === 8 || (musicMood === 'final' && (s === 6 || s === 14)));
+  if (kickHit) {
+    tone(128, 0.14, 'sine', musicMood === 'menu' ? 0.14 : 0.22, -92, delay, musicGain, 0, { attack: 0.002 });
+    noiseBurst(0.018, 0.04, 1800, delay, musicGain, 0, { filterType: 'bandpass', q: 1.4 });
+  }
+
+  // Crisp snare / tactical clap on backbeats (battle & final)
+  if (musicMood !== 'menu' && (s === 4 || s === 12)) {
+    noiseBurst(0.11, 0.075, 2200, delay, musicGain, 0, { filterType: 'bandpass', q: 1.1, endCutoff: 900 });
+    tone(195, 0.075, 'triangle', 0.065, -90, delay, musicGain);
+  }
+
+  // Hi-hat groove
+  const hatHit = musicMood === 'final' ? true : (musicMood === 'battle' ? s % 2 === 0 : s % 4 === 2);
+  if (hatHit) {
+    const openHat = s === 14 || s === 6;
+    noiseBurst(openHat ? 0.065 : 0.028, openHat ? 0.022 : 0.013, 8200, delay, musicGain,
+      s % 2 ? 0.14 : -0.14, { filterType: 'highpass' });
   }
 }
 
 function updateMusic() {
-  if (!actx || !audioSettings.music || audioMuted) return;
+  if (!actx || !audioSettings.music || audioMuted || document.hidden || actx.state !== 'running') return;
   const m = MUSIC[musicMood];
   const stepDur = 60 / m.bpm / 4;
   const now = actx.currentTime;
-  if (musicNextNote < now - 0.5) musicNextNote = now + 0.05;
+  if (musicNextNote < now - 0.35 || musicNextNote > now + 1.5) musicNextNote = now + 0.05;
   let guard = 0;
-  while (musicNextNote < now + 0.18 && guard++ < 32) {
+  while (musicNextNote < now + 0.16 && guard++ < 16) {
     scheduleMusicStep(musicStep, musicNextNote);
     musicNextNote += stepDur;
     musicStep++;
   }
 }
 
-function sfx(name, x, y) {
+function sfx(name, x, y, param = 0) {
   if (audioMuted || !ensureAudio()) return;
+  if (actx && actx.state !== 'running') return;
   const v = spatialGain(x, y);
   if (v < 0.07 && x != null) return;
   const pan = x != null ? spatialPan(x) : 0;
@@ -1016,159 +1212,192 @@ function sfx(name, x, y) {
   const gap = SFX_GAP[name] || 45;
   if (now - (SFX_LAST[name] || 0) < gap) return;
   SFX_LAST[name] = now;
+  const jit = 0.95 + Math.random() * 0.1;
+
   switch (name) {
     case 'pistol':
-      noiseBurst(0.06, 0.3 * v, 2600, 0, null, pan);
-      tone(180, 0.07, 'square', 0.1 * v, -100, 0, null, pan);
-      tone(620, 0.035, 'triangle', 0.03 * v, -420, 0, null, pan);
+      noiseBurst(0.065, 0.32 * v, 3200 * jit, 0, null, pan, { endCutoff: 850, reverb: 0.14 });
+      tone(210 * jit, 0.075, 'triangle', 0.13 * v, -135, 0, null, pan);
+      tone(980 * jit, 0.026, 'square', 0.045 * v, -620, 0, null, pan);
       break;
     case 'smg':
-      noiseBurst(0.035, 0.2 * v, 3200, 0, null, pan);
-      tone(240, 0.045, 'square', 0.06 * v, -120, 0, null, pan);
+      noiseBurst(0.042, 0.24 * v, 3800 * jit, 0, null, pan, { filterType: 'bandpass', q: 0.9, endCutoff: 1100, reverb: 0.1 });
+      tone(265 * jit, 0.046, 'sawtooth', 0.085 * v, -150, 0, null, pan, { cutoff: 1900 });
+      tone(1250 * jit, 0.018, 'triangle', 0.03 * v, -520, 0, null, pan);
       break;
     case 'shotgun':
-      noiseBurst(0.16, 0.42 * v, 1300, 0, null, pan);
-      tone(85, 0.16, 'triangle', 0.16 * v, -40, 0, null, pan);
-      noiseBurst(0.24, 0.07 * v, 480, 0.03, null, pan);
+      noiseBurst(0.18, 0.48 * v, 1900 * jit, 0, null, pan, { endCutoff: 320, reverb: 0.32 });
+      tone(112 * jit, 0.19, 'triangle', 0.24 * v, -76, 0, null, pan);
+      noiseBurst(0.28, 0.14 * v, 720, 0.025, null, pan, { endCutoff: 200, reverb: 0.28 });
+      // Subtle mechanical pump-rack follow-up
+      noiseBurst(0.045, 0.07 * v, 2400, 0.18, null, pan, { filterType: 'bandpass', q: 2.4 });
+      tone(340, 0.035, 'square', 0.028 * v, 120, 0.21, null, pan);
       break;
     case 'rifle':
-      noiseBurst(0.09, 0.4 * v, 4200, 0, null, pan);
-      tone(120, 0.12, 'sawtooth', 0.14 * v, -70, 0, null, pan);
-      noiseBurst(0.18, 0.06 * v, 900, 0.04, null, pan);
+      noiseBurst(0.1, 0.42 * v, 4400 * jit, 0, null, pan, { endCutoff: 780, reverb: 0.24 });
+      tone(155 * jit, 0.12, 'sawtooth', 0.16 * v, -95, 0, null, pan, { cutoff: 1400 });
+      noiseBurst(0.035, 0.16 * v, 5200, 0, null, pan, { filterType: 'highpass' });
       break;
     case 'pulse':
-      tone(760, 0.06, 'sawtooth', 0.09 * v, -440, 0, null, pan);
-      tone(1420, 0.05, 'sine', 0.05 * v, -620, 0, null, pan);
-      noiseBurst(0.045, 0.14 * v, 4600, 0, null, pan);
+      tone(860 * jit, 0.068, 'sawtooth', 0.1 * v, -540, 0, null, pan, { cutoff: 3400, endCutoff: 700, reverb: 0.16 });
+      tone(1620 * jit, 0.055, 'sine', 0.06 * v, -840, 0, null, pan);
+      noiseBurst(0.045, 0.15 * v, 4800, 0, null, pan, { filterType: 'bandpass', q: 1.5 });
       break;
     case 'revolver':
-      noiseBurst(0.11, 0.48 * v, 2100, 0, null, pan);
-      tone(95, 0.14, 'square', 0.16 * v, -45, 0, null, pan);
+      noiseBurst(0.13, 0.48 * v, 2800 * jit, 0, null, pan, { endCutoff: 520, reverb: 0.34 });
+      tone(125 * jit, 0.16, 'sawtooth', 0.2 * v, -78, 0, null, pan, { cutoff: 1100 });
+      tone(680 * jit, 0.08, 'triangle', 0.06 * v, -380, 0.01, null, pan, { reverb: 0.22 });
       break;
     case 'dmr':
-      noiseBurst(0.075, 0.34 * v, 3600, 0, null, pan);
-      tone(150, 0.1, 'sawtooth', 0.12 * v, -60, 0, null, pan);
+      noiseBurst(0.085, 0.36 * v, 4800 * jit, 0, null, pan, { endCutoff: 900, reverb: 0.26 });
+      tone(195 * jit, 0.11, 'sawtooth', 0.14 * v, -110, 0, null, pan, { cutoff: 2200 });
+      tone(1100 * jit, 0.032, 'sine', 0.05 * v, -700, 0, null, pan);
       break;
     case 'lmg':
-      noiseBurst(0.05, 0.25 * v, 2800, 0, null, pan);
-      tone(140, 0.06, 'square', 0.09 * v, -70, 0, null, pan);
+      noiseBurst(0.062, 0.3 * v, 3100 * jit, 0, null, pan, { endCutoff: 680, reverb: 0.18 });
+      tone(148 * jit, 0.075, 'sawtooth', 0.13 * v, -84, 0, null, pan, { cutoff: 1200 });
+      tone(780 * jit, 0.022, 'square', 0.032 * v, -320, 0, null, pan);
       break;
     case 'sniper':
-      noiseBurst(0.2, 0.52 * v, 3400, 0, null, pan);
-      tone(70, 0.22, 'triangle', 0.2 * v, -30, 0, null, pan);
-      noiseBurst(0.09, 0.16 * v, 900, 0.02, null, pan);
-      noiseBurst(0.5, 0.07 * v, 600, 0.08, null, pan);
+      noiseBurst(0.22, 0.56 * v, 4600 * jit, 0, null, pan, { endCutoff: 420, reverb: 0.48 });
+      tone(94 * jit, 0.26, 'triangle', 0.28 * v, -56, 0, null, pan);
+      noiseBurst(0.05, 0.24 * v, 5600, 0, null, pan, { filterType: 'highpass' });
+      noiseBurst(0.45, 0.11 * v, 740, 0.06, null, pan, { endCutoff: 190, reverb: 0.45 });
       break;
     case 'railgun':
-      tone(1850, 0.18, 'sawtooth', 0.13 * v, -1550, 0, null, pan);
-      tone(95, 0.26, 'triangle', 0.24 * v, -45, 0, null, pan);
-      noiseBurst(0.16, 0.44 * v, 5200, 0, null, pan);
+      tone(2100, 0.2, 'sawtooth', 0.14 * v, -1820, 0, null, pan, { cutoff: 5200, endCutoff: 420, reverb: 0.42 });
+      tone(118, 0.3, 'triangle', 0.28 * v, -74, 0, null, pan);
+      tone(540, 0.32, 'sine', 0.08 * v, 280, 0.02, null, pan, { reverb: 0.46 });
+      noiseBurst(0.18, 0.46 * v, 6400, 0, null, pan, { endCutoff: 800, reverb: 0.38 });
       break;
     case 'minigun':
-      noiseBurst(0.036, 0.22 * v, 3400, 0, null, pan);
-      tone(165, 0.04, 'sawtooth', 0.08 * v, -95, 0, null, pan);
-      tone(520, 0.025, 'square', 0.032 * v, -260, 0, null, pan);
+      noiseBurst(0.04, 0.25 * v, 3600 * jit, 0, null, pan, { filterType: 'bandpass', q: 0.8, endCutoff: 950, reverb: 0.14 });
+      tone(152 * jit, 0.045, 'sawtooth', 0.11 * v, -92, 0, null, pan, { cutoff: 1500 });
+      tone(640 * jit, 0.022, 'square', 0.036 * v, -310, 0, null, pan);
       break;
-    case 'minigunSpin':
-      tone(140, 0.14, 'sawtooth', 0.045 * v, 210, 0, null, pan);
-      tone(290, 0.13, 'triangle', 0.03 * v, 280, 0.01, null, pan);
+    case 'minigunSpin': {
+      const sp = clamp(param || 0, 0, 1);
+      const baseF = 115 + sp * 240;
+      tone(baseF, 0.14, 'sawtooth', (0.045 + sp * 0.03) * v, 75, 0, null, pan, { cutoff: 900 + sp * 1800 });
+      tone(baseF * 2.02, 0.13, 'triangle', (0.028 + sp * 0.02) * v, 110, 0.008, null, pan);
       break;
+    }
     case 'bazooka':
-      tone(112, 0.24, 'triangle', 0.24 * v, -74, 0, null, pan);
-      noiseBurst(0.32, 0.44 * v, 1100, 0, null, pan);
-      noiseBurst(0.26, 0.22 * v, 2400, 0.04, null, pan);
+      // Pneumatic launch tube thoomp + rocket motor ignition whoosh
+      tone(118, 0.26, 'triangle', 0.3 * v, -84, 0, null, pan, { reverb: 0.3 });
+      noiseBurst(0.14, 0.44 * v, 1250, 0, null, pan, { endCutoff: 340, reverb: 0.32 });
+      noiseBurst(0.36, 0.26 * v, 2800, 0.035, null, pan, { filterType: 'bandpass', q: 0.9, endCutoff: 620, attack: 0.025, reverb: 0.28 });
       break;
     case 'explosion':
-      noiseBurst(0.45, 0.58 * v, 680, 0, null, pan);
-      tone(68, 0.42, 'sawtooth', 0.24 * v, -42, 0, null, pan);
-      tone(130, 0.22, 'triangle', 0.18 * v, -90, 0.02, null, pan);
+      // Seismic sub-drop + fiery roar + debris crackle + arena echo
+      tone(82, 0.48, 'sine', 0.34 * v, -58, 0, null, pan);
+      tone(138, 0.28, 'sawtooth', 0.22 * v, -104, 0.01, null, pan, { cutoff: 520, endCutoff: 95 });
+      noiseBurst(0.12, 0.56 * v, 3200, 0, null, pan, { endCutoff: 450, reverb: 0.48 });
+      noiseBurst(0.55, 0.48 * v, 860, 0.02, null, pan, { endCutoff: 140, reverb: 0.52 });
+      noiseBurst(0.24, 0.14 * v, 4200, 0.09, null, pan, { filterType: 'bandpass', q: 1.8 });
       break;
     case 'emp':
-      tone(980, 0.3, 'sawtooth', 0.12 * v, -840, 0, null, pan);
-      tone(340, 0.38, 'sine', 0.16 * v, -260, 0.03, null, pan);
-      noiseBurst(0.22, 0.24 * v, 3800, 0, null, pan);
+      tone(1180, 0.32, 'sawtooth', 0.14 * v, -1040, 0, null, pan, { cutoff: 4200, endCutoff: 280, reverb: 0.4 });
+      tone(380, 0.42, 'sine', 0.2 * v, -300, 0.025, null, pan, { reverb: 0.32 });
+      noiseBurst(0.24, 0.26 * v, 4600, 0, null, pan, { filterType: 'bandpass', q: 1.6, endCutoff: 520 });
       break;
     case 'smoke':
-      noiseBurst(0.55, 0.22 * v, 1100, 0, null, pan);
-      tone(180, 0.12, 'sine', 0.06 * v, -80, 0, null, pan);
+      noiseBurst(0.62, 0.26 * v, 1600, 0, null, pan, { endCutoff: 520, attack: 0.04, reverb: 0.22 });
+      tone(220, 0.14, 'sine', 0.06 * v, -110, 0, null, pan);
       break;
     case 'throw':
-      noiseBurst(0.09, 0.14 * v, 1600, 0, null, pan);
-      tone(320, 0.08, 'sine', 0.05 * v, 160, 0, null, pan);
+      noiseBurst(0.1, 0.16 * v, 2100, 0, null, pan, { filterType: 'bandpass', q: 1.2, endCutoff: 700 });
+      tone(320, 0.085, 'sine', 0.055 * v, 190, 0, null, pan);
       break;
     case 'bounce':
-      tone(290, 0.045, 'triangle', 0.07 * v, -90, 0, null, pan);
+      tone(310 * jit, 0.048, 'triangle', 0.075 * v, -110, 0, null, pan);
+      noiseBurst(0.024, 0.05 * v, 2200, 0, null, pan, { filterType: 'bandpass', q: 2.2 });
       break;
     case 'boost':
-      tone(240, 0.24, 'sine', 0.12 * v, 680, 0, null, pan);
-      noiseBurst(0.2, 0.16 * v, 2400, 0, null, pan);
+      tone(240, 0.26, 'sine', 0.15 * v, 760, 0, null, pan, { reverb: 0.24 });
+      tone(480, 0.2, 'triangle', 0.08 * v, 820, 0.02, null, pan);
+      noiseBurst(0.22, 0.18 * v, 2800, 0, null, pan, { filterType: 'bandpass', q: 1.2, endCutoff: 5200 });
       break;
     case 'crateBreak':
-      noiseBurst(0.14, 0.26 * v, 1200, 0, null, pan);
-      tone(140, 0.11, 'square', 0.09 * v, -80, 0, null, pan);
+      noiseBurst(0.17, 0.3 * v, 1500, 0, null, pan, { endCutoff: 360, reverb: 0.2 });
+      tone(155 * jit, 0.11, 'square', 0.1 * v, -92, 0, null, pan, { cutoff: 950 });
+      noiseBurst(0.09, 0.16 * v, 3200, 0.03, null, pan, { filterType: 'bandpass', q: 2.0 });
       break;
     case 'swap':
-      tone(520, 0.045, 'triangle', 0.06, 180);
+      tone(480, 0.04, 'triangle', 0.065, 220);
+      noiseBurst(0.032, 0.06, 3600, 0.015, null, 0, { filterType: 'bandpass', q: 2.4 });
       break;
     case 'crit':
-      tone(920, 0.065, 'triangle', 0.11 * v, 420);
-      tone(1520, 0.08, 'sine', 0.08 * v, 240, 0.025);
+      tone(1040, 0.07, 'triangle', 0.12 * v, 460, 0, null, pan, { reverb: 0.22 });
+      tone(1680, 0.1, 'sine', 0.095 * v, 280, 0.02, null, pan, { reverb: 0.28 });
+      noiseBurst(0.025, 0.08 * v, 5800, 0, null, pan, { filterType: 'highpass' });
       break;
     case 'aura':
-      [660, 990, 1320].forEach((f, i) => tone(f, 0.22, 'sine', 0.07, 180, i * 0.055));
+      [660, 990, 1320, 1760].forEach((f, i) =>
+        tone(f, 0.24, 'sine', 0.065, 120, i * 0.05, null, (i - 1.5) * 0.2, { reverb: 0.35 }));
       break;
     case 'hit':
-      tone(420, 0.045, 'square', 0.07 * v, -180);
+      tone(520 * jit, 0.042, 'triangle', 0.085 * v, -240, 0, null, pan);
+      noiseBurst(0.02, 0.075 * v, 4200, 0, null, pan, { filterType: 'bandpass', q: 1.8 });
       break;
     case 'hurt':
-      tone(95, 0.18, 'sawtooth', 0.16, -30);
-      noiseBurst(0.09, 0.12, 700);
+      tone(98, 0.2, 'sawtooth', 0.2, -46, 0, null, 0, { cutoff: 480 });
+      noiseBurst(0.11, 0.16, 820, 0, null, 0, { endCutoff: 240 });
       break;
     case 'reload':
-      tone(620, 0.04, 'square', 0.045);
-      tone(380, 0.05, 'square', 0.035, 0, 0.06);
+      tone(640, 0.035, 'square', 0.05, -180);
+      noiseBurst(0.035, 0.07, 2800, 0.03, null, 0, { filterType: 'bandpass', q: 2.4 });
+      tone(390, 0.048, 'triangle', 0.045, -70, 0.065);
       break;
     case 'reloadDone':
-      tone(780, 0.05, 'sine', 0.06);
-      tone(1120, 0.06, 'sine', 0.045, 0, 0.05);
+      noiseBurst(0.03, 0.08, 3800, 0, null, 0, { filterType: 'bandpass', q: 2.2 });
+      tone(780, 0.05, 'triangle', 0.075, 160);
+      tone(1180, 0.075, 'sine', 0.06, 90, 0.048, null, 0, { reverb: 0.2 });
       break;
     case 'pickup':
-      tone(620, 0.07, 'sine', 0.09);
-      tone(940, 0.09, 'sine', 0.065, 0, 0.07);
+      tone(587, 0.075, 'triangle', 0.095, 60, 0, null, 0, { reverb: 0.18 });
+      tone(880, 0.1, 'sine', 0.08, 80, 0.065, null, 0, { reverb: 0.24 });
       break;
     case 'kill':
-      tone(300, 0.16, 'sawtooth', 0.11, -170);
-      tone(520, 0.22, 'sine', 0.05, -320, 0.03);
+      tone(115, 0.18, 'sine', 0.18, -62);
+      tone(523, 0.14, 'triangle', 0.1, 180, 0.015, null, 0, { reverb: 0.28 });
+      tone(784, 0.22, 'sine', 0.085, 120, 0.06, null, 0, { reverb: 0.34 });
       break;
     case 'streak':
-      [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.18, 'triangle', 0.075, 0, i * 0.06));
+      [523, 659, 784, 1047].forEach((f, i) =>
+        tone(f, 0.22, 'triangle', 0.08, 0, i * 0.055, null, (i - 1.5) * 0.18, { reverb: 0.32 }));
       break;
     case 'armor':
-      tone(320, 0.1, 'sine', 0.08, 260);
-      tone(640, 0.14, 'sine', 0.05, 380, 0.05);
+      tone(420, 0.11, 'sine', 0.09 * v, 320, 0, null, pan, { reverb: 0.25 });
+      tone(840, 0.15, 'triangle', 0.065 * v, 440, 0.04, null, pan, { reverb: 0.3 });
+      noiseBurst(0.07, 0.09 * v, 5400, 0.01, null, pan, { filterType: 'highpass' });
       break;
     case 'zone':
-      tone(64, 0.55, 'sawtooth', 0.11, 34);
-      noiseBurst(0.5, 0.06, 320);
+      tone(62, 0.65, 'sawtooth', 0.14, 28, 0, null, 0, { cutoff: 340, endCutoff: 780, reverb: 0.45 });
+      tone(124, 0.55, 'triangle', 0.08, 42, 0.05, null, 0, { reverb: 0.4 });
+      noiseBurst(0.52, 0.08, 380, 0, null, 0, { endCutoff: 140 });
       break;
     case 'dash':
-      noiseBurst(0.15, 0.1, 900);
-      tone(210, 0.12, 'sine', 0.05, 190);
+      noiseBurst(0.16, 0.14, 1400, 0, null, 0, { filterType: 'bandpass', q: 0.9, endCutoff: 3400 });
+      tone(190, 0.13, 'sine', 0.075, 240);
       break;
     case 'empty':
-      tone(150, 0.03, 'square', 0.045);
+      tone(175, 0.03, 'square', 0.05, -40);
       break;
     case 'ui':
-      tone(720, 0.045, 'sine', 0.05, 160);
+      tone(760, 0.045, 'sine', 0.055, 180);
       break;
     case 'record':
-      [784, 988, 1319].forEach((f, i) => tone(f, 0.22, 'triangle', 0.07, 0, i * 0.09));
+      [784, 988, 1319, 1568].forEach((f, i) =>
+        tone(f, 0.24, 'triangle', 0.075, 0, i * 0.085, null, (i - 1.5) * 0.2, { reverb: 0.34 }));
       break;
     case 'win':
-      [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.32, 'triangle', 0.1, 0, i * 0.13));
+      [523, 659, 784, 1047, 1319].forEach((f, i) =>
+        tone(f, 0.36, 'triangle', 0.1, 0, i * 0.11, null, (i - 2) * 0.18, { reverb: 0.4 }));
       break;
     case 'lose':
-      [330, 262, 196].forEach((f, i) => tone(f, 0.35, 'triangle', 0.09, 0, i * 0.15));
+      [330, 262, 196, 147].forEach((f, i) =>
+        tone(f, 0.38, 'triangle', 0.095, -12, i * 0.14, null, 0, { cutoff: 1400, reverb: 0.35 }));
       break;
   }
 }
@@ -1272,11 +1501,13 @@ window.addEventListener('mousemove', (e) => {
   mouse.y = e.clientY - rect.top;
 });
 
+let lastWheelSwap = 0;
+
 canvas.addEventListener('mousedown', (e) => {
-  if (game.state !== 'playing' || !player || !player.alive) return;
+  if ((game.state !== 'playing' && game.state !== 'countdown') || !player || !player.alive) return;
   if (e.button === 0) {
     mouse.down = true;
-  } else if (e.button === 2) {
+  } else if (e.button === 2 && game.state === 'playing') {
     if (typeof tryUseGadget === 'function') tryUseGadget();
   }
 });
@@ -1288,6 +1519,9 @@ window.addEventListener('mouseup', (e) => {
 window.addEventListener('wheel', (e) => {
   if (game.state !== 'playing' || !player || !player.alive) return;
   if (Math.abs(e.deltaY) < 4) return;
+  const now = performance.now();
+  if (now - lastWheelSwap < 140) return;
+  lastWheelSwap = now;
   if (typeof switchWeapon === 'function') switchWeapon(player.activeSlot === 0 ? 1 : 0);
 }, { passive: true });
 
@@ -1660,16 +1894,25 @@ function generateDecor() {
 
 function generatePickups() {
   const defs = [];
+  // Boosted multi-tier weapon pool (52 floor spawns across T2–T5; no starter Pistol clutter):
+  // T2: 32% (16/50) · T3: 38% (19/50) · T4: 22% (11/50) · T5: 8% (4/50)
   const pool = [
-    'pistol', 'smg', 'smg', 'shotgun', 'shotgun', 'revolver', 'revolver',
-    'rifle', 'rifle', 'pulse', 'pulse', 'dmr', 'dmr', 'lmg', 'sniper',
+    'smg', 'smg', 'smg', 'smg', 'smg', 'smg',
+    'shotgun', 'shotgun', 'shotgun', 'shotgun', 'shotgun',
+    'revolver', 'revolver', 'revolver', 'revolver', 'revolver',
+    'rifle', 'rifle', 'rifle', 'rifle', 'rifle', 'rifle', 'rifle',
+    'pulse', 'pulse', 'pulse', 'pulse', 'pulse', 'pulse',
+    'dmr', 'dmr', 'dmr', 'dmr', 'dmr', 'dmr',
+    'lmg', 'lmg', 'lmg', 'lmg', 'lmg', 'lmg',
+    'sniper', 'sniper', 'sniper', 'sniper', 'sniper',
+    'railgun', 'minigun', 'bazooka', 'bazooka',
   ];
-  for (let i = 0; i < 30; i++) {
-    defs.push({ kind: 'weapon', weapon: pick(pool), skin: randomSkin() });
+  for (let i = 0; i < 52; i++) {
+    defs.push({ kind: 'weapon', weapon: pick(pool), skin: randomSkin(0.25) });
   }
-  for (let i = 0; i < 12; i++) defs.push({ kind: 'health' });
-  for (let i = 0; i < 10; i++) defs.push({ kind: 'armor' });
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < 14; i++) defs.push({ kind: 'health' });
+  for (let i = 0; i < 12; i++) defs.push({ kind: 'armor' });
+  for (let i = 0; i < 12; i++) {
     defs.push({ kind: 'gadget', gadget: pick(['frag', 'frag', 'emp', 'smoke']) });
   }
 
@@ -1678,26 +1921,26 @@ function generatePickups() {
     for (let tries = 0; tries < 90; tries++) {
       const x = rand(130, WORLD - 130);
       const y = rand(130, WORLD - 130);
-      if (pointInObstacle(x, y, 38)) continue;
-      if (list.some((p) => distance(x, y, p.x, p.y) < 64)) continue;
+      if (pointInObstacle(x, y, 36)) continue;
+      if (list.some((p) => distance(x, y, p.x, p.y) < 58)) continue;
       list.push({ ...def, x, y, phase: rand(0, TAU), dropLock: 0 });
       break;
     }
   }
 
-  // Curated rare Tier 5 heavy ordnance spawns (1 Bazooka & 1 Minigun at distinct landmarks).
+  // Curated guaranteed Tier 5 apex spawns (1 Bazooka, 1 Minigun & 1 Railgun at distinct districts).
   const heavySpots = DISTRICTS.slice().sort(() => Math.random() - 0.5);
-  const heavyWeapons = ['bazooka', 'minigun'];
+  const heavyWeapons = ['bazooka', 'minigun', 'railgun'];
   for (let h = 0; h < heavyWeapons.length; h++) {
     const spot = heavySpots[h % heavySpots.length];
     for (let tries = 0; tries < 60; tries++) {
       const x = clamp(spot.x + rand(-210, 210), 150, WORLD - 150);
       const y = clamp(spot.y + rand(-210, 210), 150, WORLD - 150);
-      if (pointInObstacle(x, y, 40)) continue;
-      if (player && distance(x, y, player.x, player.y) < 320) continue;
-      if (list.some((p) => distance(x, y, p.x, p.y) < 76)) continue;
+      if (pointInObstacle(x, y, 38)) continue;
+      if (player && distance(x, y, player.x, player.y) < 280) continue;
+      if (list.some((p) => distance(x, y, p.x, p.y) < 68)) continue;
       list.push({
-        kind: 'weapon', weapon: heavyWeapons[h], skin: randomSkin(0.65),
+        kind: 'weapon', weapon: heavyWeapons[h], skin: randomSkin(0.9),
         x, y, phase: rand(0, TAU), dropLock: 0,
       });
       break;

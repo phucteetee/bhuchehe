@@ -533,8 +533,8 @@ function updateWeapon(e, dt) {
       if (e.spin < 0.98) {
         e.spinSoundT = (e.spinSoundT || 0) - dt;
         if (e.spinSoundT <= 0) {
-          e.spinSoundT = 0.16;
-          sfx('minigunSpin', e.x, e.y);
+          e.spinSoundT = 0.15;
+          sfx('minigunSpin', e.x, e.y, e.spin);
         }
       }
     } else {
@@ -619,10 +619,13 @@ function fireRound(e, angle, isBurstFollowup = false) {
   const spread = (w.spread + (e.bloom || 0) + (e.heat || 0) * (w.heatSpread || 0)) * (moving ? 1.55 : 0.92);
   e.bloom = Math.min(0.06, (e.bloom || 0) + w.spread * 0.35);
 
-  const mx = e.x + Math.cos(angle) * (e.r + 16);
-  const my = e.y + Math.sin(angle) * (e.r + 16);
-  const flashX = e.x + Math.cos(angle) * (w.len + 20);
-  const flashY = e.y + Math.sin(angle) * (w.len + 20);
+  const rawMx = e.x + Math.cos(angle) * (e.r + 16);
+  const rawMy = e.y + Math.sin(angle) * (e.r + 16);
+  const muzzleBlocked = !hasLOS(e.x, e.y, rawMx, rawMy);
+  const mx = muzzleBlocked ? e.x + Math.cos(angle) * (e.r - 2) : rawMx;
+  const my = muzzleBlocked ? e.y + Math.sin(angle) * (e.r - 2) : rawMy;
+  const flashX = muzzleBlocked ? mx : e.x + Math.cos(angle) * (w.len + 20);
+  const flashY = muzzleBlocked ? my : e.y + Math.sin(angle) * (w.len + 20);
 
   const damageMul = dmgMul * (e === player ? (game.killBoost || 1) : 1);
   for (let i = 0; i < w.pellets; i++) {
@@ -757,11 +760,18 @@ function throwGadget(e, targetX, targetY) {
   const uy = dy / rawDist;
   const speed = clamp(dist * 1.85, 220, 680);
 
+  let spawnX = e.x + ux * (e.r + 10);
+  let spawnY = e.y + uy * (e.r + 10);
+  if (pointInObstacle(spawnX, spawnY, 7)) {
+    spawnX = e.x;
+    spawnY = e.y;
+  }
+
   projectiles.push({
     kind: g.id,
     owner: e,
-    x: e.x + ux * (e.r + 10),
-    y: e.y + uy * (e.r + 10),
+    x: spawnX,
+    y: spawnY,
     vx: ux * speed,
     vy: uy * speed,
     z: 10,
@@ -834,7 +844,8 @@ function explodeArea(x, y, radius, maxDmg, source, tag = 'BLAST', opts = {}) {
   // Damage entities in blast radius with falloff, direct-hit bonus & knockback.
   let splashHitEnemy = false;
   const r2 = radius * radius;
-  for (const e of allEntities()) {
+  const blastTargets = allEntities().slice();
+  for (const e of blastTargets) {
     if (!e.alive) continue;
     const isDirect = !!(directTarget && e === directTarget);
     const dx = e.x - x;
@@ -899,7 +910,8 @@ function detonateEMP(x, y, g, source) {
     if (pd < 600) game.shake = Math.max(game.shake, (1 - pd / 600) * 6);
   }
   const r2 = g.radius * g.radius;
-  for (const e of allEntities()) {
+  const empTargets = allEntities().slice();
+  for (const e of empTargets) {
     if (!e.alive || e === source) continue;
     const d2 = (e.x - x) * (e.x - x) + (e.y - y) * (e.y - y);
     if (d2 > r2) continue;
@@ -1012,19 +1024,25 @@ function damageObstacle(o, dmg, source) {
         rand(0.3, 0.65), 0.65, rand(3, 6), i % 2 ? '#a57943' : '#55442c', 3.5, a);
     }
     spawnParticle('dust', cx, cy, 0, 0, 0.45, 0.45, 22, '#9a8262', 2);
-    if (Math.random() < 0.55) {
+    if (Math.random() < 0.68) {
       const roll = Math.random();
-      if (roll < 0.34) {
+      if (roll < 0.28) {
         pickups.push({ kind: 'health', x: cx, y: cy, phase: rand(0, TAU), dropLock: 0.15, spawnT: 0.35 });
-      } else if (roll < 0.64) {
+      } else if (roll < 0.54) {
         pickups.push({ kind: 'armor', x: cx, y: cy, phase: rand(0, TAU), dropLock: 0.15, spawnT: 0.35 });
-      } else if (roll < 0.85) {
+      } else if (roll < 0.72) {
         pickups.push({ kind: 'gadget', gadget: pick(['frag', 'emp', 'smoke']), x: cx, y: cy, phase: rand(0, TAU), dropLock: 0.15, spawnT: 0.35 });
       } else {
+        const crateWeapons = [
+          'smg', 'shotgun', 'revolver',
+          'rifle', 'rifle', 'pulse', 'pulse', 'dmr', 'dmr',
+          'lmg', 'lmg', 'sniper', 'sniper',
+          'bazooka', 'minigun', 'railgun',
+        ];
         pickups.push({
           kind: 'weapon',
-          weapon: pick(['smg', 'shotgun', 'rifle', 'pulse', 'dmr', 'revolver']),
-          skin: randomSkin(1.2),
+          weapon: pick(crateWeapons),
+          skin: randomSkin(1.4),
           x: cx, y: cy, phase: rand(0, TAU), dropLock: 0.15, spawnT: 0.35,
         });
       }
@@ -1895,6 +1913,8 @@ function updateBullets(dt) {
    --------------------------------------------------------- */
 function damage(target, amount, source, opts = {}) {
   if (!target.alive || game.state !== 'playing') return;
+  // Once victory is secured, prevent post-win slow-mo storm/blast from overturning Victory!
+  if (game.pendingEnd && game.pendingEnd.win && target === player) return;
   if (target === player && game.invuln > 0 && !opts.trueDamage) {
     if (!opts.silent) {
       spawnParticle('shard', target.x, target.y, rand(-90, 90), rand(-90, 90),
@@ -1908,11 +1928,13 @@ function damage(target, amount, source, opts = {}) {
   target.lastHitT = game.time;
 
   const hadArmor = target.armor > 0;
+  let absorbed = 0;
   if (!opts.trueDamage && target.armor > 0) {
-    const absorbed = Math.min(target.armor, dmg * 0.6);
+    absorbed = Math.min(target.armor, dmg * 0.6);
     target.armor -= absorbed;
     dmg -= absorbed;
   }
+  const totalDealt = dmg + absorbed;
   target.hp -= dmg;
   if (!opts.storm) {
     target.hitFlash = 0.14;
@@ -1922,7 +1944,7 @@ function damage(target, amount, source, opts = {}) {
       const fdx = target.x - source.x;
       const fdy = target.y - source.y;
       const fl = Math.hypot(fdx, fdy) || 1;
-      const imp = clamp(dmg * 0.14, 2, 7);
+      const imp = clamp(totalDealt * 0.14, 2, 7);
       target.flinchX = clamp((target.flinchX || 0) + (fdx / fl) * imp, -9, 9);
       target.flinchY = clamp((target.flinchY || 0) + (fdy / fl) * imp, -9, 9);
     }
@@ -1940,10 +1962,10 @@ function damage(target, amount, source, opts = {}) {
   }
 
   if (source === player && target !== player && !opts.storm) {
-    player.damageDealt += dmg;
+    player.damageDealt += totalDealt;
     if (!opts.blast || opts.directHit) player.shotsHit++;
     if (opts.crit) player.crits++;
-    if (typeof track === 'function') track('damage', dmg);
+    if (typeof track === 'function') track('damage', totalDealt);
   }
 
   if (source === player && target !== player) {
@@ -1951,9 +1973,12 @@ function damage(target, amount, source, opts = {}) {
     game.hitmarkerTotal = game.hitmarker;
     game.hitmarkerKill = false;
     game.hitmarkerCrit = !!(opts.crit || opts.directHit);
-    if (!opts.silent && dmg >= 1) {
-      const txt = opts.crit || opts.directHit ? Math.round(dmg) + '!' : String(Math.round(dmg));
-      const col = opts.crit ? '#ffd166' : opts.directHit ? '#ff9f45' : (dmg >= 30 ? '#ffcf86' : '#ffffff');
+    if (!opts.silent && totalDealt >= 1) {
+      const txt = opts.crit || opts.directHit ? Math.round(totalDealt) + '!' : String(Math.round(totalDealt));
+      const col = opts.crit ? '#ffd166'
+        : opts.directHit ? '#ff9f45'
+        : absorbed > 0 ? '#8be6ff'
+        : (totalDealt >= 30 ? '#ffcf86' : '#ffffff');
       spawnText(target.x + rand(-7, 7), target.y - target.r - 4, txt, col,
         opts.crit || opts.directHit ? 17 : 14, opts.crit || opts.directHit ? 0.95 : 0.8);
     }
@@ -2038,8 +2063,8 @@ function killEntity(e, source, byStorm, info = {}) {
   }
 
   if (typeof addFeed === 'function') {
-    if (byStorm || !source) addFeed('THE STORM', e.name, true, false, null, false);
-    else addFeed(source.name, e.name, false, source === player, info.weapon || source.weapon, !!info.blast);
+    if (byStorm || !source) addFeed('THE STORM', e.name, true, false, null, false, false);
+    else addFeed(source.name, e.name, false, source === player, info.weapon || source.weapon, !!info.blast, source === e);
   }
 
   spawnDeathBurst(e);
@@ -2060,16 +2085,16 @@ function dropLoot(e) {
       x, y, phase: rand(0, TAU), dropLock: 0.25, spawnT: 0.36,
     });
   };
-  if (Math.random() < 0.55) {
+  if (Math.random() < 0.5) {
     drop({ kind: 'weapon', weapon: e.weapon, skin: e.skin });
   } else {
     const dropPool = e.elite
-      ? ['rifle', 'pulse', 'dmr', 'lmg', 'sniper', 'minigun', 'bazooka', 'railgun']
-      : ['smg', 'shotgun', 'revolver', 'rifle', 'pulse', 'dmr', 'lmg', 'sniper'];
+      ? ['rifle', 'pulse', 'dmr', 'lmg', 'lmg', 'sniper', 'sniper', 'minigun', 'bazooka', 'railgun']
+      : ['smg', 'shotgun', 'revolver', 'rifle', 'pulse', 'dmr', 'lmg', 'lmg', 'sniper', 'sniper', 'bazooka', 'minigun'];
     drop({
       kind: 'weapon',
       weapon: pick(dropPool),
-      skin: randomSkin(e.elite ? 1.5 : 0.2),
+      skin: randomSkin(e.elite ? 1.8 : 0.45),
     });
   }
   if (Math.random() < 0.42) drop({ kind: 'health' });
@@ -2136,13 +2161,18 @@ function interactPickup() {
     equipWeaponToEntity(p, target, p.activeSlot);
     pickupBurst(target);
     pickups.splice(idx, 1);
-    // Drop previous weapon cleanly onto the floor with brief dropLock so it doesn't bounce back.
+    // Drop previous weapon cleanly onto an unobstructed spot with brief dropLock.
     if (oldSlot) {
+      let dx = p.x;
+      let dy = p.y;
+      for (let t = 0; t < 10; t++) {
+        const cx = clamp(p.x + rand(-18, 18), 60, WORLD - 60);
+        const cy = clamp(p.y + rand(-18, 18), 60, WORLD - 60);
+        if (!pointInObstacle(cx, cy, 14)) { dx = cx; dy = cy; break; }
+      }
       pickups.push({
         kind: 'weapon', weapon: oldSlot.weapon, skin: oldSlot.skin,
-        x: clamp(p.x + rand(-14, 14), 60, WORLD - 60),
-        y: clamp(p.y + rand(-14, 14), 60, WORLD - 60),
-        phase: rand(0, TAU), dropLock: 0.75,
+        x: dx, y: dy, phase: rand(0, TAU), dropLock: 0.75,
       });
     }
     game.nearPickup = null;
@@ -2158,11 +2188,16 @@ function interactPickup() {
     sfx('pickup');
     showToast(g.name + ' EQUIPPED', 1200);
     if (oldCharges > 0 && oldG !== g.id) {
+      let dx = p.x;
+      let dy = p.y;
+      for (let t = 0; t < 10; t++) {
+        const cx = clamp(p.x + rand(-18, 18), 60, WORLD - 60);
+        const cy = clamp(p.y + rand(-18, 18), 60, WORLD - 60);
+        if (!pointInObstacle(cx, cy, 14)) { dx = cx; dy = cy; break; }
+      }
       pickups.push({
         kind: 'gadget', gadget: oldG,
-        x: clamp(p.x + rand(-14, 14), 60, WORLD - 60),
-        y: clamp(p.y + rand(-14, 14), 60, WORLD - 60),
-        phase: rand(0, TAU), dropLock: 0.75,
+        x: dx, y: dy, phase: rand(0, TAU), dropLock: 0.75,
       });
     }
     game.nearPickup = null;
@@ -2235,6 +2270,11 @@ function applyAutoPickup(e, p) {
         e.activeSlot = 1;
         syncEntityFromSlot(e);
         e.reloading = false;
+        e.reloadT = 0;
+        e.burstLeft = 0;
+        e.spin = 0;
+        e.heat = 0;
+        e.spinSoundT = 0;
         e.weaponChangeT = 0.25;
       }
       pickupBurst(p);
@@ -2287,19 +2327,19 @@ function applyAutoPickup(e, p) {
 
 function addStarterLoot() {
   if (!player) return;
-  const weapons = ['smg', 'shotgun', 'rifle', 'pulse', 'revolver', 'dmr'];
-  for (let n = 0; n < 3; n++) {
+  const weapons = ['smg', 'shotgun', 'revolver', 'rifle', 'rifle', 'pulse', 'dmr', 'lmg', 'sniper'];
+  for (let n = 0; n < 4; n++) {
     for (let i = 0; i < 60; i++) {
       const a = rand(0, TAU);
-      const d = rand(210, 480);
+      const d = rand(190, 480);
       const x = clamp(player.x + Math.cos(a) * d, 140, WORLD - 140);
       const y = clamp(player.y + Math.sin(a) * d, 140, WORLD - 140);
       if (pointInObstacle(x, y, 36)) continue;
-      if (pickups.some((p) => distance(x, y, p.x, p.y) < 72)) continue;
+      if (pickups.some((p) => distance(x, y, p.x, p.y) < 68)) continue;
       pickups.push({
         kind: 'weapon',
         weapon: pick(weapons),
-        skin: randomSkin(2.4 - n * 0.55),
+        skin: randomSkin(2.4 - n * 0.45),
         x, y, phase: rand(0, TAU), dropLock: 0,
       });
       break;
@@ -2353,7 +2393,8 @@ function updateZone(dt) {
   }
 
   if (game.state !== 'playing') return;
-  for (const e of allEntities()) {
+  const zoneTargets = allEntities().slice();
+  for (const e of zoneTargets) {
     if (!e.alive) continue;
     const dx = e.x - z.x;
     const dy = e.y - z.y;
@@ -2388,15 +2429,17 @@ function updateSupplyDrop(dt) {
     }
   }
 
-  const weapons = zone.phase >= 3
-    ? ['railgun', 'bazooka', 'minigun', 'sniper', 'lmg']
-    : ['railgun', 'bazooka', 'minigun', 'dmr', 'pulse', 'lmg'];
+  const apexWeapons = ['railgun', 'bazooka', 'minigun'];
+  const bonusWeapons = ['sniper', 'lmg', 'dmr', 'pulse'];
   const skin = randomSkin(4.2);
+  const bonusSkin = randomSkin(2.6);
   const addSupply = (def, ox = 0, oy = 0) => {
+    const sx = clamp(pos.x + ox, 60, WORLD - 60);
+    const sy = clamp(pos.y + oy, 60, WORLD - 60);
     pickups.push({
       ...def,
-      x: clamp(pos.x + ox, 60, WORLD - 60),
-      y: clamp(pos.y + oy, 60, WORLD - 60),
+      x: pointInObstacle(sx, sy, 14) ? pos.x : sx,
+      y: pointInObstacle(sx, sy, 14) ? pos.y : sy,
       phase: rand(0, TAU),
       supply: true,
       dropLock: 0,
@@ -2404,14 +2447,19 @@ function updateSupplyDrop(dt) {
   };
   addSupply({
     kind: 'weapon',
-    weapon: pick(weapons),
+    weapon: pick(apexWeapons),
     skin: skin === 'factory' ? 'inferno' : skin,
   });
-  addSupply({ kind: 'armor' }, 28, 6);
-  addSupply({ kind: 'health' }, -28, 6);
+  addSupply({
+    kind: 'weapon',
+    weapon: pick(bonusWeapons),
+    skin: bonusSkin === 'factory' ? 'gold' : bonusSkin,
+  }, 0, 28);
+  addSupply({ kind: 'armor' }, 28, 4);
+  addSupply({ kind: 'health' }, -28, 4);
   addSupply({ kind: 'gadget', gadget: pick(['frag', 'emp', 'smoke']) }, 0, -28);
 
-  game.supplyNext = game.matchTime + (getGameMode().supplyGap || 72);
+  game.supplyNext = game.matchTime + (getGameMode().supplyGap || 58);
   if (typeof showToast === 'function') {
     showToast('HIGH-TIER CACHE DEPLOYED', 1900, 'gold');
   }

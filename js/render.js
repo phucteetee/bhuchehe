@@ -2658,7 +2658,7 @@ const hudCache = {
   pickupKey: '',
   dash: '', dashReady: null, dashProgress: null, hpCritical: null, ammoLow: null,
   zone: '', zoneClosing: null, warn: null, warnAngle: null, warnDist: '', storm: -1, hurt: -1,
-  supply: '', operator: '', buff: '',
+  supply: '', operator: '', buff: '', streak: '',
 };
 
 function resetHUDCache() {
@@ -2667,6 +2667,9 @@ function resetHUDCache() {
   }
   lockTargetCache = null;
   lockTargetAt = -1;
+  _crosshairLastT = 0;
+  _lockAnim = 0;
+  _lastLockId = 0;
 }
 
 function updateHUD() {
@@ -2742,9 +2745,12 @@ function updateHUD() {
   }
 
   const streak = player.killStreak || 0;
-  if (UI.streakBanner && UI.streakCount) {
-    UI.streakCount.textContent = String(streak);
-    UI.streakBanner.classList.toggle('show', streak >= 2 && player.streakT > 0);
+  const streakShow = streak >= 2 && player.streakT > 0;
+  const streakKey = streakShow ? String(streak) : '';
+  if (streakKey !== hudCache.streak && UI.streakBanner && UI.streakCount) {
+    hudCache.streak = streakKey;
+    if (streakShow) UI.streakCount.textContent = streakKey;
+    UI.streakBanner.classList.toggle('show', streakShow);
   }
 
   const hpPct = Math.round(clamp(player.hp / player.maxHp, 0, 1) * 1000) / 10;
@@ -2998,7 +3004,7 @@ function updateHUD() {
   }
 }
 
-function addFeed(killerName, victimName, byStorm, isPlayer, weaponKey, isBlast) {
+function addFeed(killerName, victimName, byStorm, isPlayer, weaponKey, isBlast, isSelf = false) {
   const el = document.createElement('div');
   el.className = 'feedItem' + (byStorm ? ' storm' : isBlast ? ' blast' : '');
   const killerStyle = isPlayer ? ' style="color:#5ee7ff"' : '';
@@ -3008,7 +3014,11 @@ function addFeed(killerName, victimName, byStorm, isPlayer, weaponKey, isBlast) 
   } else if (weaponKey) {
     weapon = `<em style="color:#ff8f45">${escapeHtml(weaponKey)}</em>`;
   }
-  el.innerHTML = `<b${killerStyle}>${escapeHtml(killerName)}</b>${weapon}<span>eliminated</span><b class="victim">${escapeHtml(victimName)}</b>`;
+  if (isSelf) {
+    el.innerHTML = `<b${killerStyle}>${escapeHtml(killerName)}</b>${weapon}<span>self-eliminated</span>`;
+  } else {
+    el.innerHTML = `<b${killerStyle}>${escapeHtml(killerName)}</b>${weapon}<span>eliminated</span><b class="victim">${escapeHtml(victimName)}</b>`;
+  }
   UI.feed.appendChild(el);
   while (UI.feed.children.length > 6) UI.feed.firstChild.remove();
   setTimeout(() => {
@@ -3056,8 +3066,10 @@ function buildMinimapStatic(S, mmDpr) {
   g.fillStyle = 'rgba(255,255,255,0.035)';
   for (const r of ROADS) g.fillRect(mapX(r.x), mapY(r.y), r.w * k, r.h * k);
 
-  g.fillStyle = 'rgba(255,255,255,0.08)';
+  // Bake only indestructible cover into static minimap; destructible crates render live below.
+  g.fillStyle = 'rgba(255,255,255,0.09)';
   for (const o of obstacles) {
+    if (o.destructible) continue;
     g.fillRect(mapX(o.x), mapY(o.y), Math.max(1, o.w * k), Math.max(1, o.h * k));
   }
 
@@ -3109,6 +3121,14 @@ function drawMinimap() {
   const k = (S - pad * 2) / WORLD;
   const mapX = (x) => pad + x * k;
   const mapY = (y) => pad + y * k;
+
+  // Live intact destructible crates on radar (vanish cleanly when shattered)
+  mctx.fillStyle = 'rgba(196,154,96,0.22)';
+  for (let i = 0; i < obstacles.length; i++) {
+    const o = obstacles[i];
+    if (!o.destructible || o.destroyed) continue;
+    mctx.fillRect(mapX(o.x), mapY(o.y), Math.max(1, o.w * k), Math.max(1, o.h * k));
+  }
 
   mctx.save();
   mctx.beginPath();
