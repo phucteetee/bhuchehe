@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
 <title>BATTLEGROUND — Tactical Royale v0.1.4</title>
-<link rel="stylesheet" href="style.css?v=13" />
+<link rel="stylesheet" href="style.css?v=14" />
 </head>
 <body>
 <canvas id="game"></canvas>
@@ -16,8 +16,6 @@
       <div class="pill elims" id="elimsPill"><b id="killCount">0</b><span>ELIMS</span></div>
       <div class="pill safe hidden" id="safePill"><span class="safeDot"></span><span>SAFE ZONE</span></div>
       <div class="pill" id="alivePill"><span class="dot"></span><b id="aliveCount">30</b><span>ALIVE</span></div>
-      <div class="pill zone" id="zonePill"><span class="zoneIcon"></span><span id="zoneText">ZONE 1 · 30s</span></div>
-      <div class="pill supply" id="supplyPill"><span class="supplyIcon"></span><span id="supplyText">CACHE 01:00</span></div>
       <div class="pill aura" id="auraPill"><span class="auraStar">✦</span><b id="auraCount">0</b><span>AURA</span></div>
     </div>
 
@@ -70,13 +68,22 @@
     </button>
   </aside>
 
-  <div id="minimapWrap">
-    <div class="hudCorners" aria-hidden="true"></div>
-    <canvas id="minimap" width="180" height="180"></canvas>
-    <div id="minimapLabel">RADAR</div>
-  </div>
+  <div id="topRightDock">
+    <div id="radarRow">
+      <div id="zoneBar">
+        <div class="pill zone" id="zonePill"><span class="zoneIcon"></span><span id="zoneText">ZONE 1 · 30s</span></div>
+        <div class="pill supply" id="supplyPill"><span class="supplyIcon"></span><span id="supplyText">CACHE 01:00</span></div>
+      </div>
 
-  <div id="feed"></div>
+      <div id="minimapWrap">
+        <div class="hudCorners" aria-hidden="true"></div>
+        <canvas id="minimap" width="180" height="180"></canvas>
+        <div id="minimapLabel">RADAR</div>
+      </div>
+    </div>
+
+    <div id="feed"></div>
+  </div>
 
   <div id="stormWarn"><span>!</span><i id="warnArrow" aria-hidden="true"></i> <em>GET INSIDE THE ZONE</em> <b id="warnDist">0m</b></div>
 
@@ -496,6 +503,6 @@
 <script src="js/profile.js?v=11"></script>
 <script src="js/combat.js?v=12"></script>
 <script src="js/render.js?v=12"></script>
-<script src="js/main.js?v=12"></script>
+<script src="js/main.js?v=13"></script>
 </body>
 </html>
