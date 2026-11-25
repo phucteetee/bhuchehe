@@ -37,6 +37,13 @@ function spawnBullet(opts) {
   b.maxSpeed = opts.maxSpeed || 0;
   b.crateDmgMul = opts.crateDmgMul || 1;
   b.inSafeZone = !!opts.inSafeZone;
+  b.bounces = opts.bounces || 0;
+  b.bounceCount = 0;
+  b.bounceBonus = opts.bounceBonus || 0;
+  b.disc = !!opts.disc;
+  b.cryo = !!opts.cryo;
+  b.chill = opts.chill || 0;
+  b.masteryTier = opts.masteryTier || 0;
   b.smokeT = 0;
   return b;
 }
@@ -217,6 +224,9 @@ function makeEntity(opts) {
     jamT: 0,
     slowT: 0,
     speedBoostT: 0,
+    stealth: false,
+    stealthBreakT: 0,
+    pylonLink: null,
     // bot AI state
     target: null,
     lootTarget: null,
@@ -538,6 +548,7 @@ function updateWeapon(e, dt) {
   e.jamT = Math.max(0, (e.jamT || 0) - dt);
   e.slowT = Math.max(0, (e.slowT || 0) - dt);
   e.speedBoostT = Math.max(0, (e.speedBoostT || 0) - dt);
+  e.stealthBreakT = Math.max(0, (e.stealthBreakT || 0) - dt);
   e.weaponChangeT = Math.max(0, e.weaponChangeT - dt);
   e.spawnT = Math.max(0, (e.spawnT || 0) - dt);
   e.bloom = Math.max(0, (e.bloom || 0) - dt * 0.18);
@@ -681,12 +692,17 @@ function fireRound(e, angle, isBurstFollowup = false) {
   const dmgMul = 1 + skin.bonus;
   const accent = skin.bonus > 0 ? skin.color : w.color;
   const tracer = skin.bonus > 0 ? skin.color : w.tracer;
+  e.stealthBreakT = 0.85;
+  e.stealth = false;
   const moving = e.isPlayer && (Math.hypot(e.moveX || 0, e.moveY || 0) > 0.15);
   if (w.heatSpread) {
     e.heat = Math.min(1, (e.heat || 0) + 0.024);
   }
-  const spread = (w.spread + (e.bloom || 0) + (e.heat || 0) * (w.heatSpread || 0)) * (moving ? 1.55 : 0.92);
-  e.bloom = Math.min(0.06, (e.bloom || 0) + w.spread * 0.35);
+  const moveMulSpread = w.moveSpreadMul != null ? w.moveSpreadMul : 1.55;
+  const spread = (w.spread + (e.bloom || 0) + (e.heat || 0) * (w.heatSpread || 0)) * (moving ? moveMulSpread : 0.92);
+  const bMax = w.bloomMax != null ? w.bloomMax : 0.06;
+  const bMul = w.bloomMul != null ? w.bloomMul : 0.35;
+  e.bloom = Math.min(bMax, (e.bloom || 0) + w.spread * bMul);
 
   const rawMx = e.x + Math.cos(angle) * (e.r + 16);
   const rawMy = e.y + Math.sin(angle) * (e.r + 16);
@@ -697,6 +713,7 @@ function fireRound(e, angle, isBurstFollowup = false) {
   const flashY = muzzleBlocked ? my : e.y + Math.sin(angle) * (w.len + 20);
 
   const damageMul = dmgMul * (e === player ? (game.killBoost || 1) : 1);
+  const masteryTier = e.isPlayer && typeof getWeaponMasteryTier === 'function' ? getWeaponMasteryTier(e.weapon) : 0;
   for (let i = 0; i < w.pellets; i++) {
     const a = angle + (Math.random() - 0.5) * 2 * spread;
     bullets.push(spawnBullet({
@@ -719,6 +736,12 @@ function fireRound(e, angle, isBurstFollowup = false) {
       accel: w.rocketAccel || 0,
       maxSpeed: w.rocketMaxSpeed || w.speed,
       crateDmgMul: w.crateDmgMul || 1,
+      bounces: w.bounces || 0,
+      bounceBonus: w.bounceBonus || 0,
+      disc: !!w.disc,
+      cryo: !!w.cryo,
+      chill: w.chill || 0,
+      masteryTier,
       inSafeZone: !!e.inSafeZone,
     }));
   }
@@ -1113,6 +1136,23 @@ function updateProjectiles(dt) {
           life: g.duration, maxLife: g.duration, seed: rand(0, TAU),
         });
         spawnParticle('shock', pr.x, pr.y, 0, 0, 0.35, 0.35, g.radius * 0.7, '#cfe3ea', 0);
+      } else if (pr.kind === 'thermite') {
+        sfx('thermite', pr.x, pr.y);
+        spawnDecal('scorch', pr.x, pr.y, g.radius * 0.65, '#190a06', 0.56, rand(0, TAU));
+        spawnParticle('wave', pr.x, pr.y, 0, 0, 0.45, 0.45, g.radius * 1.1, '#ff6d2e', 0);
+        hazards.push({
+          kind: 'thermite', x: pr.x, y: pr.y, r: g.radius, inSafeZone: inSafe,
+          owner: pr.owner, dps: g.dps, crateMul: g.crateMul || 2.35,
+          life: g.duration, maxLife: g.duration, tickT: 0.05, emitT: 0, seed: rand(0, TAU),
+        });
+      } else if (pr.kind === 'shield') {
+        sfx('shield', pr.x, pr.y);
+        spawnParticle('wave', pr.x, pr.y, 0, 0, 0.45, 0.45, g.radius * 1.15, '#46e5ff', 0);
+        domes.push({
+          x: pr.x, y: pr.y, r: g.radius, inSafeZone: inSafe,
+          owner: pr.owner, hp: g.hp, maxHp: g.hp,
+          life: g.duration, maxLife: g.duration, hitFlash: 0, seed: rand(0, TAU),
+        });
       }
       const last = projectiles.pop();
       if (i < projectiles.length) projectiles[i] = last;
@@ -1129,6 +1169,157 @@ function updateSmokes(dt) {
       if (i < smokes.length) smokes[i] = last;
     }
   }
+}
+
+function updateHazards(dt) {
+  const prevFx = _fxSafeMap;
+  const fx = getGraphicsSettings().fx;
+  for (let i = hazards.length - 1; i >= 0; i--) {
+    const hz = hazards[i];
+    const inSafe = !!hz.inSafeZone;
+    _fxSafeMap = inSafe;
+    hz.life -= dt;
+    if (hz.life <= 0) {
+      const last = hazards.pop();
+      if (i < hazards.length) hazards[i] = last;
+      continue;
+    }
+    hz.emitT -= dt;
+    if (hz.emitT <= 0) {
+      hz.emitT = fx >= 2 ? 0.055 : fx >= 1 ? 0.095 : 0.16;
+      const a = rand(0, TAU);
+      const rr = Math.sqrt(Math.random()) * hz.r * 0.86;
+      spawnParticle('spark', hz.x + Math.cos(a) * rr, hz.y + Math.sin(a) * rr,
+        rand(-28, 28), rand(-95, -30), rand(0.24, 0.48), 0.48,
+        rand(1.6, 3.2), Math.random() < 0.5 ? '#ff6d2e' : '#ffd166', 1.8);
+    }
+    hz.tickT -= dt;
+    if (hz.tickT > 0) continue;
+    hz.tickT = 0.2;
+    const stepDmg = hz.dps * 0.2;
+    const r2 = hz.r * hz.r;
+    if (inSafe) {
+      for (let k = 0; k < safeZoneDummies.length; k++) {
+        const dm = safeZoneDummies[k];
+        if (!dm.alive) continue;
+        const dx = dm.x - hz.x;
+        const dy = dm.y - hz.y;
+        if (dx * dx + dy * dy <= (hz.r + dm.r * 0.6) * (hz.r + dm.r * 0.6)) {
+          damageDummy(dm, stepDmg, hz.owner, {});
+        }
+      }
+      continue;
+    }
+    const targets = allEntities().slice();
+    for (const e of targets) {
+      if (!e.alive || e.inSafeZone) continue;
+      const dx = e.x - hz.x;
+      const dy = e.y - hz.y;
+      if (dx * dx + dy * dy > (hz.r + e.r * 0.5) * (hz.r + e.r * 0.5)) continue;
+      const selfMul = e === hz.owner ? 0.35 : 1;
+      damage(e, stepDmg * selfMul, hz.owner, { weapon: 'THERMITE', dist: Math.hypot(dx, dy), blast: true });
+    }
+    // Burn destructible crates rapidly & ignite fuel barrels
+    const nearObs = queryObstacles(hz.x - hz.r, hz.y - hz.r, hz.x + hz.r, hz.y + hz.r);
+    for (let k = 0; k < nearObs.length; k++) {
+      const o = nearObs[k];
+      if (!o.destructible || o.destroyed) continue;
+      const cx = o.x + o.w / 2;
+      const cy = o.y + o.h / 2;
+      if ((cx - hz.x) * (cx - hz.x) + (cy - hz.y) * (cy - hz.y) <= r2 + 1200) {
+        damageObstacle(o, stepDmg * hz.crateMul, hz.owner);
+      }
+    }
+    for (let k = 0; k < barrels.length; k++) {
+      const bar = barrels[k];
+      if (!bar.alive || bar.burnT > 0) continue;
+      const dx = bar.x - hz.x;
+      const dy = bar.y - hz.y;
+      if (dx * dx + dy * dy <= r2) {
+        bar.chainSource = hz.owner;
+        bar.burnT = 0.65;
+      }
+    }
+  }
+  _fxSafeMap = prevFx;
+}
+
+function updateDomes(dt) {
+  const prevFx = _fxSafeMap;
+  for (let i = domes.length - 1; i >= 0; i--) {
+    const dm = domes[i];
+    _fxSafeMap = !!dm.inSafeZone;
+    dm.life -= dt;
+    if (dm.hitFlash > 0) dm.hitFlash = Math.max(0, dm.hitFlash - dt);
+    if (dm.life <= 0 || dm.hp <= 0) {
+      if (dm.hp <= 0) {
+        sfx('shieldBreak', dm.x, dm.y);
+        spawnParticle('shock', dm.x, dm.y, 0, 0, 0.35, 0.35, dm.r * 1.15, '#6cf2ff', 0);
+      }
+      const last = domes.pop();
+      if (i < domes.length) domes[i] = last;
+    }
+  }
+  _fxSafeMap = prevFx;
+}
+
+function updateEnvironment(dt) {
+  const prevFx = _fxSafeMap;
+  _fxSafeMap = false;
+  const ents = allEntities();
+
+  // Reset per-frame stealth & pylon link status
+  for (let i = 0; i < ents.length; i++) {
+    ents[i].stealth = false;
+    ents[i].pylonLink = null;
+  }
+
+  // 1. Holographic Stealth Brushes
+  for (let i = 0; i < stealthZones.length; i++) {
+    const sz = stealthZones[i];
+    const r2 = (sz.r - 4) * (sz.r - 4);
+    for (let k = 0; k < ents.length; k++) {
+      const e = ents[k];
+      if (!e.alive || e.inSafeZone || e.stealthBreakT > 0) continue;
+      const dx = e.x - sz.x;
+      const dy = e.y - sz.y;
+      if (dx * dx + dy * dy <= r2) e.stealth = true;
+    }
+  }
+
+  // 2. District Shield Recharge Pylons
+  for (let i = 0; i < shieldPylons.length; i++) {
+    const py = shieldPylons[i];
+    if (py.cooldown > 0) {
+      py.cooldown = Math.max(0, py.cooldown - dt);
+      if (py.cooldown <= 0) {
+        py.charge = py.maxCharge;
+        spawnParticle('shock', py.x, py.y, 0, 0, 0.4, 0.4, py.auraR, '#5ee7ff', 0);
+      }
+      continue;
+    }
+    const r2 = py.auraR * py.auraR;
+    for (let k = 0; k < ents.length; k++) {
+      const e = ents[k];
+      if (!e.alive || e.inSafeZone || e.armor >= e.maxArmor) continue;
+      const dx = e.x - py.x;
+      const dy = e.y - py.y;
+      if (dx * dx + dy * dy > r2) continue;
+      const gain = Math.min(18 * dt, e.maxArmor - e.armor, py.charge);
+      if (gain <= 0) continue;
+      e.armor += gain;
+      py.charge -= gain;
+      e.pylonLink = py;
+      if (e.isPlayer) sfx('pylon', py.x, py.y);
+      if (py.charge <= 0.1) {
+        py.charge = 0;
+        py.cooldown = py.maxCooldown;
+        spawnParticle('wave', py.x, py.y, 0, 0, 0.4, 0.4, py.auraR, '#5ee7ff', 0);
+        break;
+      }
+    }
+  }
+  _fxSafeMap = prevFx;
 }
 
 /* ---------------------------------------------------------
@@ -1166,19 +1357,19 @@ function damageObstacle(o, dmg, source) {
         } else if (roll < 0.76) {
           pickups.push({ kind: 'armor', x: cx, y: cy, phase: rand(0, TAU), dropLock: 0.15, spawnT: 0.35 });
         } else {
-          pickups.push({ kind: 'gadget', gadget: pick(['frag', 'emp', 'smoke']), x: cx, y: cy, phase: rand(0, TAU), dropLock: 0.15, spawnT: 0.35 });
+          pickups.push({ kind: 'gadget', gadget: pick(['frag', 'emp', 'smoke', 'thermite', 'shield']), x: cx, y: cy, phase: rand(0, TAU), dropLock: 0.15, spawnT: 0.35 });
         }
       } else if (roll < 0.28) {
         pickups.push({ kind: 'health', x: cx, y: cy, phase: rand(0, TAU), dropLock: 0.15, spawnT: 0.35 });
       } else if (roll < 0.54) {
         pickups.push({ kind: 'armor', x: cx, y: cy, phase: rand(0, TAU), dropLock: 0.15, spawnT: 0.35 });
       } else if (roll < 0.72) {
-        pickups.push({ kind: 'gadget', gadget: pick(['frag', 'emp', 'smoke']), x: cx, y: cy, phase: rand(0, TAU), dropLock: 0.15, spawnT: 0.35 });
+        pickups.push({ kind: 'gadget', gadget: pick(['frag', 'emp', 'smoke', 'thermite', 'shield']), x: cx, y: cy, phase: rand(0, TAU), dropLock: 0.15, spawnT: 0.35 });
       } else {
         const crateWeapons = [
           'smg', 'shotgun', 'revolver',
           'rifle', 'rifle', 'pulse', 'pulse', 'dmr', 'dmr',
-          'lmg', 'lmg', 'sniper', 'sniper',
+          'lmg', 'lmg', 'ricochet', 'ricochet', 'cryo', 'cryo', 'sniper', 'sniper',
           'bazooka', 'minigun', 'railgun',
         ];
         pickups.push({
@@ -1193,6 +1384,69 @@ function damageObstacle(o, dmg, source) {
   _fxSafeMap = prevFx;
 }
 
+function detonateCryoBarrel(x, y, source) {
+  const prevFx = _fxSafeMap;
+  _fxSafeMap = false;
+  const radius = 178;
+  sfx('emp', x, y);
+  spawnDecal('scorch', x, y, radius * 0.38, '#0b2538', 0.55, rand(0, TAU));
+  spawnParticle('wave', x, y, 0, 0, 0.52, 0.52, radius * 1.15, '#5ee7ff', 0);
+  spawnParticle('shock', x, y, 0, 0, 0.38, 0.38, radius * 0.92, '#d2faff', 0);
+  const gfx = getGraphicsSettings();
+  const shards = gfx.fx >= 2 ? 20 : gfx.fx >= 1 ? 12 : 6;
+  for (let i = 0; i < shards; i++) {
+    const a = rand(0, TAU);
+    const sp = rand(95, 360);
+    spawnParticle(i % 2 ? 'shard' : 'spark', x, y, Math.cos(a) * sp, Math.sin(a) * sp,
+      rand(0.25, 0.55), 0.55, rand(2, 4.5), i % 3 ? '#5ee7ff' : '#ffffff', 3.2, a);
+  }
+  if (player && player.alive && !player.inSafeZone) {
+    const pd = distance(x, y, player.x, player.y);
+    if (pd < 650) game.shake = Math.max(game.shake, (1 - pd / 650) * 7.5);
+  }
+  const r2 = radius * radius;
+  const targets = allEntities().slice();
+  for (const e of targets) {
+    if (!e.alive || e.inSafeZone) continue;
+    const dx = e.x - x;
+    const dy = e.y - y;
+    const d2 = dx * dx + dy * dy;
+    if (d2 > r2) continue;
+    const mul = e === source ? 0.5 : 1;
+    if (e.armor > 0) {
+      const shred = Math.min(e.armor, 45 * mul);
+      e.armor -= shred;
+      if (source === player && e !== player) spawnText(e.x, e.y - 34, '-' + Math.round(shred) + ' ARM', '#5ee7ff', 13, 0.9);
+    }
+    e.slowT = Math.max(e.slowT, 3.0 * mul);
+    e.jamT = Math.max(e.jamT, 2.2 * mul);
+    e.burstLeft = 0;
+    e.burstT = 0;
+    e.spin = 0;
+    damage(e, 38 * mul, source, { weapon: 'CRYO', dist: Math.sqrt(d2), blast: true });
+    if (source === player && e !== player) spawnText(e.x, e.y - 48, 'FROZEN', '#8ef5ff', 11, 0.9);
+  }
+  // Chain-trigger neighboring barrels
+  for (let i = 0; i < barrels.length; i++) {
+    const other = barrels[i];
+    if (!other.alive) continue;
+    if (distance(x, y, other.x, other.y) <= radius * 1.05) {
+      other.hp = 0;
+      other.chainSource = source;
+      if (other.burnT <= 0) other.burnT = 0.16;
+    }
+  }
+  _fxSafeMap = prevFx;
+}
+
+function detonateBarrel(bar, source) {
+  if (bar.kind === 'cryo') {
+    detonateCryoBarrel(bar.x, bar.y, source);
+  } else {
+    explodeArea(bar.x, bar.y, 168, 115, source, 'BARREL', { inSafeZone: false });
+  }
+}
+
 function damageBarrel(bar, dmg, source) {
   if (!bar || !bar.alive) return;
   bar.hp -= dmg;
@@ -1201,7 +1455,7 @@ function damageBarrel(bar, dmg, source) {
   bar.chainSource = source;
   if (bar.hp <= 0) {
     bar.alive = false;
-    explodeArea(bar.x, bar.y, 168, 115, source, 'BARREL');
+    detonateBarrel(bar, source);
   } else if (bar.hp < bar.maxHp * 0.55 && bar.burnT <= 0) {
     bar.burnT = 1.8;
   }
@@ -1220,11 +1474,11 @@ function updateBarrels(dt) {
       if (Math.random() < 0.35) {
         spawnParticle('spark', bar.x + rand(-6, 6), bar.y + rand(-6, 6),
           rand(-40, 40), rand(-90, -25), rand(0.18, 0.36), 0.36,
-          rand(1.5, 3), '#ff8f3d', 2);
+          rand(1.5, 3), bar.kind === 'cryo' ? '#5ee7ff' : '#ff8f3d', 2);
       }
       if (bar.burnT <= 0) {
         bar.alive = false;
-        explodeArea(bar.x, bar.y, 168, 115, bar.chainSource || null, 'BARREL', { inSafeZone: false });
+        detonateBarrel(bar, bar.chainSource || null);
       }
     }
   }
@@ -1481,6 +1735,8 @@ function acquireTarget(b) {
     const dy = o.y - b.y;
     const d2 = dx * dx + dy * dy;
     if (d2 > range2) continue;
+    // Stealth brush hides operators beyond close-quarters 115px detection range.
+    if (o.stealth && d2 > 115 * 115 && !recentlyHit) continue;
     if (lineBlockedBySmoke(b.x, b.y, o.x, o.y)) continue;
     if (!hasLOS(b.x, b.y, o.x, o.y)) continue;
     const d = Math.sqrt(d2);
@@ -1582,11 +1838,19 @@ function findIncomingBullet(e) {
 function findDangerousProjectile(e) {
   for (let i = 0; i < projectiles.length; i++) {
     const pr = projectiles[i];
-    if (pr.kind === 'smoke') continue;
+    if (pr.kind === 'smoke' || pr.kind === 'shield') continue;
     const r = pr.radius + 26;
     const dx = e.x - pr.x;
     const dy = e.y - pr.y;
     if (dx * dx + dy * dy <= r * r) return pr;
+  }
+  for (let i = 0; i < hazards.length; i++) {
+    const hz = hazards[i];
+    if (hz.inSafeZone) continue;
+    const r = hz.r + 22;
+    const dx = e.x - hz.x;
+    const dy = e.y - hz.y;
+    if (dx * dx + dy * dy <= r * r) return hz;
   }
   return null;
 }
@@ -1683,7 +1947,7 @@ function updateBot(b, dt) {
       }
     }
   }
-  if (b.target && (!b.target.alive || b.target.inSafeZone)) b.target = null;
+  if (b.target && (!b.target.alive || b.target.inSafeZone || (b.target.stealth && distance(b.x, b.y, b.target.x, b.target.y) > 130))) b.target = null;
 
   const t = b.target;
   const z = zone;
@@ -1918,6 +2182,25 @@ function updateBullets(dt) {
       // Dedicated Safe Zone Map bullet simulation (100% isolated from Combat Map)
       if (inSafe) {
         if (nx < 34 || nx > SAFE_MAP_W - 34 || ny < 34 || ny > SAFE_MAP_H - 34) {
+          if (b.bounces > 0) {
+            const hitX = nx < 34 || nx > SAFE_MAP_W - 34;
+            const hitY = ny < 34 || ny > SAFE_MAP_H - 34;
+            spawnBeam(b.startX, b.startY, b.x, b.y, b.color, 2.2, 0.2);
+            if (hitX) b.vx = -b.vx;
+            if (hitY) b.vy = -b.vy;
+            b.angle = Math.atan2(b.vy, b.vx);
+            b.bounces--;
+            b.bounceCount++;
+            b.dmg *= (1 + b.bounceBonus);
+            b.hitId = 0;
+            b.startX = clamp(b.x, 36, SAFE_MAP_W - 36);
+            b.startY = clamp(b.y, 36, SAFE_MAP_H - 36);
+            b.x = b.startX;
+            b.y = b.startY;
+            spawnHitSparks(b.x, b.y, b.color);
+            sfx('bounceShot', b.x, b.y);
+            break;
+          }
           if (b.explosive) {
             explodeArea(b.x, b.y, b.splashRadius, b.splashDmg, b.owner, b.weapon, {
               inSafeZone: true, selfDmgMul: 0, crateDmgMul: b.crateDmgMul,
@@ -1987,6 +2270,25 @@ function updateBullets(dt) {
 
       // 0. Combat Map world bounds
       if (nx < 16 || nx > WORLD - 16 || ny < 16 || ny > WORLD - 16) {
+        if (b.bounces > 0) {
+          const hitX = nx < 16 || nx > WORLD - 16;
+          const hitY = ny < 16 || ny > WORLD - 16;
+          spawnBeam(b.startX, b.startY, b.x, b.y, b.color, 2.2, 0.2);
+          if (hitX) b.vx = -b.vx;
+          if (hitY) b.vy = -b.vy;
+          b.angle = Math.atan2(b.vy, b.vx);
+          b.bounces--;
+          b.bounceCount++;
+          b.dmg *= (1 + b.bounceBonus);
+          b.hitId = 0;
+          b.startX = clamp(b.x, 18, WORLD - 18);
+          b.startY = clamp(b.y, 18, WORLD - 18);
+          b.x = b.startX;
+          b.y = b.startY;
+          spawnHitSparks(b.x, b.y, b.color);
+          sfx('bounceShot', b.x, b.y);
+          break;
+        }
         if (b.explosive) {
           explodeArea(b.x, b.y, b.splashRadius, b.splashDmg, b.owner, b.weapon, {
             inSafeZone: false, selfDmgMul: b.selfDmgMul, crateDmgMul: b.crateDmgMul,
@@ -1998,6 +2300,55 @@ function updateBullets(dt) {
         done = true;
         break;
       }
+
+      // 0.5. Active Shield Domes block enemy projectiles crossing the dome shell
+      let domeBlocked = false;
+      for (let k = 0; k < domes.length; k++) {
+        const dm = domes[k];
+        if (dm.inSafeZone || dm.hp <= 0 || dm.owner === b.owner) continue;
+        const dPrev = Math.hypot(b.x - dm.x, b.y - dm.y);
+        const dNext = Math.hypot(nx - dm.x, ny - dm.y);
+        const crossed = (dPrev > dm.r && dNext <= dm.r) || (dPrev < dm.r && dNext >= dm.r);
+        if (!crossed) continue;
+        dm.hp -= b.dmg;
+        dm.hitFlash = 0.16;
+        const ix = (b.x + nx) * 0.5;
+        const iy = (b.y + ny) * 0.5;
+        spawnHitSparks(ix, iy, '#5ee7ff');
+        sfx('shieldHit', ix, iy);
+        if (b.bounces > 0 && !b.explosive) {
+          const rdx = ix - dm.x;
+          const rdy = iy - dm.y;
+          const rl = Math.hypot(rdx, rdy) || 1;
+          const nrmX = rdx / rl;
+          const nrmY = rdy / rl;
+          const dot = b.vx * nrmX + b.vy * nrmY;
+          spawnBeam(b.startX, b.startY, ix, iy, b.color, 2.2, 0.2);
+          b.vx -= 2 * dot * nrmX;
+          b.vy -= 2 * dot * nrmY;
+          b.angle = Math.atan2(b.vy, b.vx);
+          b.bounces--;
+          b.bounceCount++;
+          b.dmg *= (1 + b.bounceBonus);
+          b.startX = ix;
+          b.startY = iy;
+          b.x = ix;
+          b.y = iy;
+          sfx('bounceShot', ix, iy);
+        } else {
+          if (b.explosive) {
+            explodeArea(ix, iy, b.splashRadius, b.splashDmg, b.owner, b.weapon, {
+              inSafeZone: false, selfDmgMul: b.selfDmgMul, crateDmgMul: b.crateDmgMul,
+              knockback: b.knockback, dist: b.travelled, countSplashHit: true,
+            });
+          }
+          b.x = ix; b.y = iy;
+          done = true;
+        }
+        domeBlocked = true;
+        break;
+      }
+      if (domeBlocked) break;
 
       // 1. Find earliest obstacle hit along this sub-step segment (cover blocks shots first!)
       let obsHit = null;
@@ -2075,6 +2426,35 @@ function updateBullets(dt) {
           b.pierce--;
           obsHit = null;
           obsT = 2;
+        } else if (b.bounces > 0 && !obsHit.destroyed) {
+          // Reflect energy disc off obstacle face (slab penetration normal).
+          const dLeft = Math.abs(ix - obsHit.x);
+          const dRight = Math.abs(ix - (obsHit.x + obsHit.w));
+          const dTop = Math.abs(iy - obsHit.y);
+          const dBottom = Math.abs(iy - (obsHit.y + obsHit.h));
+          const minX = Math.min(dLeft, dRight);
+          const minY = Math.min(dTop, dBottom);
+          spawnBeam(b.startX, b.startY, ix, iy, b.color, 2.4, 0.22);
+          if (minX <= minY) {
+            b.vx = -b.vx;
+            b.x = ix + (dLeft < dRight ? -2 : 2);
+            b.y = iy;
+          } else {
+            b.vy = -b.vy;
+            b.x = ix;
+            b.y = iy + (dTop < dBottom ? -2 : 2);
+          }
+          b.angle = Math.atan2(b.vy, b.vx);
+          b.bounces--;
+          b.bounceCount++;
+          b.dmg *= (1 + b.bounceBonus);
+          b.hitId = 0;
+          b.startX = b.x;
+          b.startY = b.y;
+          b.travelled = hitDist;
+          spawnParticle('shock', ix, iy, 0, 0, 0.2, 0.2, 28, b.color, 0);
+          sfx('bounceShot', ix, iy);
+          break;
         } else {
           b.x = ix;
           b.y = iy;
@@ -2142,6 +2522,12 @@ function updateBullets(dt) {
         if (b.knockback) {
           hit.boostVelX += ux * b.knockback * 4.5;
           hit.boostVelY += uy * b.knockback * 4.5;
+        }
+        if (b.chill > 0) {
+          hit.slowT = Math.max(hit.slowT || 0, b.chill);
+          if (getGraphicsSettings().fx >= 1) {
+            spawnParticle('shard', ix, iy, rand(-90, 90), rand(-90, 90), 0.25, 0.25, 3.2, '#9cf6ff', 4, rand(0, TAU));
+          }
         }
         spawnHitSparks(ix, iy, isCrit ? '#ffd166' : b.color);
         spawnParticle('shock', ix, iy, 0, 0, 0.22, 0.22, isCrit ? 46 : 34, isCrit ? '#ffd166' : b.color, 0);
@@ -2364,8 +2750,8 @@ function killEntity(e, source, byStorm, info = {}) {
       track('kills', 1);
       if (weapon === 'sniper' || weapon === 'railgun') track('sniperKills', 1);
       else if (weapon === 'shotgun') track('shotgunKills', 1);
-      else if (weapon === 'rifle' || weapon === 'dmr' || weapon === 'pulse') track('rifleKills', 1);
-      else if (weapon === 'lmg' || weapon === 'minigun' || weapon === 'bazooka') track('heavyKills', 1);
+      else if (weapon === 'rifle' || weapon === 'dmr' || weapon === 'pulse' || weapon === 'ricochet') track('rifleKills', 1);
+      else if (weapon === 'lmg' || weapon === 'minigun' || weapon === 'bazooka' || weapon === 'cryo') track('heavyKills', 1);
       if (dist >= 900) track('longshot', 1);
     }
   }
@@ -2376,7 +2762,7 @@ function killEntity(e, source, byStorm, info = {}) {
         if (byStorm || !source) addFeed('THE STORM', e.name, true, false, null, false, false);
         else addFeed(source.name, e.name, false, source === player, info.weapon || source.weapon, !!info.blast, source === e);
       }
-      spawnDeathBurst(e);
+      spawnDeathBurst(e, source);
       respawnPracticePlayer();
       return;
     }
@@ -2391,7 +2777,7 @@ function killEntity(e, source, byStorm, info = {}) {
     else addFeed(source.name, e.name, false, source === player, info.weapon || source.weapon, !!info.blast, source === e);
   }
 
-  spawnDeathBurst(e);
+  spawnDeathBurst(e, source);
   dropLoot(e);
   if (practice && !e.isPlayer) {
     respawnPracticeBot(e);
@@ -2424,8 +2810,8 @@ function dropLoot(e) {
       drop({ kind: 'weapon', weapon: e.weapon, skin: e.skin });
     } else {
       const dropPool = e.elite
-        ? ['rifle', 'pulse', 'dmr', 'lmg', 'lmg', 'sniper', 'sniper', 'minigun', 'bazooka', 'railgun']
-        : ['smg', 'shotgun', 'revolver', 'rifle', 'pulse', 'dmr', 'lmg', 'lmg', 'sniper', 'sniper', 'bazooka', 'minigun'];
+        ? ['rifle', 'pulse', 'dmr', 'ricochet', 'cryo', 'lmg', 'sniper', 'minigun', 'bazooka', 'railgun']
+        : ['smg', 'shotgun', 'revolver', 'rifle', 'pulse', 'dmr', 'ricochet', 'cryo', 'lmg', 'sniper', 'bazooka', 'minigun'];
       drop({
         kind: 'weapon',
         weapon: pick(dropPool),
@@ -2436,7 +2822,7 @@ function dropLoot(e) {
   if (Math.random() < (practice ? 0.52 : 0.42)) drop({ kind: 'health' });
   if (Math.random() < (practice ? 0.44 : 0.34)) drop({ kind: 'armor' });
   if (Math.random() < (e.elite ? 0.65 : 0.28)) {
-    drop({ kind: 'gadget', gadget: pick(['frag', 'emp', 'smoke']) });
+    drop({ kind: 'gadget', gadget: pick(['frag', 'emp', 'smoke', 'thermite', 'shield']) });
   }
 }
 
@@ -2719,6 +3105,18 @@ function clearSafeZoneTransientFx() {
     if (smokes[i].inSafeZone) {
       const last = smokes.pop();
       if (i < smokes.length) smokes[i] = last;
+    }
+  }
+  for (let i = hazards.length - 1; i >= 0; i--) {
+    if (hazards[i].inSafeZone) {
+      const last = hazards.pop();
+      if (i < hazards.length) hazards[i] = last;
+    }
+  }
+  for (let i = domes.length - 1; i >= 0; i--) {
+    if (domes[i].inSafeZone) {
+      const last = domes.pop();
+      if (i < domes.length) domes[i] = last;
     }
   }
 }
@@ -3248,7 +3646,7 @@ function updateSupplyDrop(dt) {
   }, 0, 28);
   addSupply({ kind: 'armor' }, 28, 4);
   addSupply({ kind: 'health' }, -28, 4);
-  addSupply({ kind: 'gadget', gadget: pick(['frag', 'emp', 'smoke']) }, 0, -28);
+  addSupply({ kind: 'gadget', gadget: pick(['frag', 'emp', 'smoke', 'thermite', 'shield']) }, 0, -28);
 
   game.supplyNext = game.matchTime + (getGameMode().supplyGap || 58);
   if (typeof showToast === 'function') {
@@ -3341,22 +3739,88 @@ function spawnHitSparks(x, y, color) {
   }
 }
 
-function spawnDeathBurst(e) {
-  spawnDecal('scorch', e.x, e.y, e.r * 1.4, '#080c12', 0.44, rand(0, TAU));
+function spawnDeathBurst(e, source = null) {
+  const fx = getGraphicsSettings().fx;
+  const finisher = (source === player && e !== player && typeof getEquippedFinisherId === 'function')
+    ? getEquippedFinisherId() : 'standard';
+
+  spawnDecal('scorch', e.x, e.y, e.r * 1.45, finisher === 'cryo' ? '#0c2a3a' : '#080c12', 0.46, rand(0, TAU));
   spawnParticle('deathGhost', e.x, e.y, 0, 0, 0.32, 0.32, e.r, e.operatorId, 0, 0);
-  spawnParticle('ring', e.x, e.y, 0, 0, 0.55, 0.55, e.r, e.color, 0);
-  spawnParticle('ring', e.x, e.y, 0, 0, 0.36, 0.36, e.r * 0.55, e.auraColor, 0);
-  spawnParticle('shock', e.x, e.y, 0, 0, 0.42, 0.42, 76, e.auraColor, 0);
-  if (e.elite) spawnParticle('wave', e.x, e.y, 0, 0, 0.7, 0.7, 150, '#ffd166', 0);
-  const sparks = getGraphicsSettings().fx >= 1 ? 14 : 6;
-  for (let i = 0; i < sparks; i++) {
-    const a = rand(0, TAU);
-    const sp = rand(40, 360);
-    spawnParticle(i % 3 === 0 ? 'dot' : 'spark', e.x, e.y,
-      Math.cos(a) * sp, Math.sin(a) * sp, rand(0.25, 0.85), 0.85,
-      rand(1.5, 4), i % 2 ? e.auraColor : '#ffd9a0', 3.5);
+
+  if (finisher === 'nova') {
+    spawnParticle('wave', e.x, e.y, 0, 0, 0.62, 0.62, 138, '#ff9f45', 0);
+    spawnParticle('shock', e.x, e.y, 0, 0, 0.44, 0.44, 96, '#ffe58f', 0);
+    spawnParticle('flash', e.x, e.y, 0, 0, 0.18, 0.18, 42, '#fff0b3', 0, rand(0, TAU));
+    const n = fx >= 2 ? 22 : fx >= 1 ? 14 : 7;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * TAU + rand(-0.12, 0.12);
+      const sp = rand(120, 380);
+      spawnParticle(i % 2 ? 'shard' : 'spark', e.x, e.y, Math.cos(a) * sp, Math.sin(a) * sp,
+        rand(0.32, 0.72), 0.72, rand(2.2, 4.8), i % 3 ? '#ff8a3d' : '#fff0a8', 3, a);
+    }
+  } else if (finisher === 'cryo') {
+    spawnParticle('wave', e.x, e.y, 0, 0, 0.58, 0.58, 126, '#6beeff', 0);
+    spawnParticle('shock', e.x, e.y, 0, 0, 0.42, 0.42, 88, '#e3fcff', 0);
+    const n = fx >= 2 ? 20 : fx >= 1 ? 12 : 6;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * TAU;
+      const sp = rand(90, 340);
+      spawnParticle('shard', e.x, e.y, Math.cos(a) * sp, Math.sin(a) * sp,
+        rand(0.35, 0.78), 0.78, rand(2.8, 5.2), i % 2 ? '#7ef2ff' : '#ffffff', 3.2, a);
+    }
+  } else if (finisher === 'lightning') {
+    spawnBeam(e.x + rand(-18, 18), e.y - 340, e.x, e.y, '#5ee7ff', 6.5, 0.42);
+    spawnBeam(e.x + rand(-12, 12), e.y - 260, e.x, e.y, '#ffffff', 3.2, 0.3);
+    spawnParticle('wave', e.x, e.y, 0, 0, 0.52, 0.52, 122, '#5ee7ff', 0);
+    spawnParticle('flash', e.x, e.y, 0, 0, 0.16, 0.16, 38, '#d6fbff', 0, 0);
+    const n = fx >= 1 ? 16 : 7;
+    for (let i = 0; i < n; i++) {
+      const a = rand(0, TAU);
+      const sp = rand(110, 410);
+      spawnParticle('spark', e.x, e.y, Math.cos(a) * sp, Math.sin(a) * sp,
+        rand(0.2, 0.52), 0.52, rand(1.6, 3.2), i % 2 ? '#5ee7ff' : '#ffffff', 4);
+    }
+  } else if (finisher === 'singularity') {
+    spawnParticle('wave', e.x, e.y, 0, 0, 0.68, 0.68, 145, '#b06cff', 0);
+    spawnParticle('ring', e.x, e.y, 0, 0, 0.55, 0.55, e.r * 0.8, '#e3c4ff', 0);
+    spawnParticle('shock', e.x, e.y, 0, 0, 0.45, 0.45, 96, '#8b42ff', 0);
+    const n = fx >= 2 ? 22 : fx >= 1 ? 14 : 7;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * TAU;
+      const dist = rand(24, 58);
+      spawnParticle(i % 2 ? 'dot' : 'spark', e.x + Math.cos(a) * dist, e.y + Math.sin(a) * dist,
+        -Math.cos(a) * rand(40, 110) - Math.sin(a) * 140,
+        -Math.sin(a) * rand(40, 110) + Math.cos(a) * 140,
+        rand(0.38, 0.78), 0.78, rand(1.8, 3.8), i % 3 ? '#b06cff' : '#f2ddff', 2.2);
+    }
+  } else if (finisher === 'supernova') {
+    const colors = ['#ffd166', '#5ee7ff', '#ff5cf4', '#6ff2b0', '#ff7a3d'];
+    spawnParticle('wave', e.x, e.y, 0, 0, 0.72, 0.72, 165, '#ffd166', 0);
+    spawnParticle('wave', e.x, e.y, 0, 0, 0.52, 0.52, 118, '#ff5cf4', 0);
+    spawnParticle('shock', e.x, e.y, 0, 0, 0.44, 0.44, 92, '#5ee7ff', 0);
+    spawnParticle('flash', e.x, e.y, 0, 0, 0.2, 0.2, 48, '#fff5c8', 0, rand(0, TAU));
+    const n = fx >= 2 ? 26 : fx >= 1 ? 16 : 8;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * TAU;
+      const sp = rand(120, 420);
+      spawnParticle(i % 2 ? 'shard' : 'spark', e.x, e.y, Math.cos(a) * sp, Math.sin(a) * sp,
+        rand(0.35, 0.82), 0.82, rand(2.2, 4.8), colors[i % colors.length], 3, a);
+    }
+  } else {
+    spawnParticle('ring', e.x, e.y, 0, 0, 0.55, 0.55, e.r, e.color, 0);
+    spawnParticle('ring', e.x, e.y, 0, 0, 0.36, 0.36, e.r * 0.55, e.auraColor, 0);
+    spawnParticle('shock', e.x, e.y, 0, 0, 0.42, 0.42, 76, e.auraColor, 0);
+    const sparks = fx >= 1 ? 14 : 6;
+    for (let i = 0; i < sparks; i++) {
+      const a = rand(0, TAU);
+      const sp = rand(40, 360);
+      spawnParticle(i % 3 === 0 ? 'dot' : 'spark', e.x, e.y,
+        Math.cos(a) * sp, Math.sin(a) * sp, rand(0.25, 0.85), 0.85,
+        rand(1.5, 4), i % 2 ? e.auraColor : '#ffd9a0', 3.5);
+    }
   }
-  if (getGraphicsSettings().fx >= 1) {
+  if (e.elite) spawnParticle('wave', e.x, e.y, 0, 0, 0.7, 0.7, 150, '#ffd166', 0);
+  if (fx >= 1) {
     for (let i = 0; i < 4; i++) {
       spawnParticle('smoke', e.x + rand(-9, 9), e.y + rand(-9, 9),
         rand(-26, 26), rand(-45, -12), rand(0.45, 0.8), 0.8,

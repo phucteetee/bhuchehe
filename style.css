@@ -25,6 +25,7 @@ body.playing{cursor:none}
 button,input{-webkit-tap-highlight-color:transparent}
 button em,#stormWarn em,.playerMeta em,.cardHead em{font-style:normal}
 :focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+.hidden{display:none!important}
 canvas#game{position:fixed;inset:0;width:100%;height:100%;display:block}
 
 /* ===================== IN-GAME TACTICAL HUD ===================== */
@@ -35,7 +36,7 @@ body.in-game #ui{opacity:1}
 
 /* ---------- top-left dock (telemetry bar + FPS + Practice controls) ---------- */
 #topLeftDock{position:absolute;top:14px;left:16px;z-index:24;display:flex;flex-direction:column;
-  align-items:flex-start;gap:6px;max-width:calc(100vw - 210px);pointer-events:none}
+  align-items:flex-start;gap:6px;max-width:calc(100vw - 360px);pointer-events:none}
 #topLeftSub{display:flex;align-items:center;gap:6px;flex-wrap:wrap;pointer-events:none}
 #fpsBadge{height:28px;display:inline-flex;align-items:center;padding:0 9px;border-radius:4px;
   background:rgba(6,12,18,.78);border:1px solid rgba(94,231,255,.24);
@@ -195,8 +196,21 @@ body.in-game #ui{opacity:1}
   box-shadow:0 0 8px var(--red);animation:blink 1.5s infinite}
 @keyframes blink{50%{opacity:.3}}
 
+/* ---------- top-right dock (Zone/Cache beside Radar + Kill Feed below) ---------- */
+#topRightDock{position:absolute;top:14px;right:16px;z-index:22;display:flex;
+  flex-direction:column;align-items:flex-end;gap:6px;pointer-events:none}
+#radarRow{display:flex;align-items:flex-start;justify-content:flex-end;gap:8px}
+#zoneBar{display:flex;flex-direction:column;align-items:flex-end;gap:5px}
+#zoneBar .pill{height:27px;padding:0 10px;border-radius:5px;
+  background:rgba(6,11,18,.78);backdrop-filter:blur(8px);
+  box-shadow:0 6px 18px rgba(0,0,0,.32)}
+#zoneBar .pill.zone{border-color:rgba(176,108,255,.36);border-right:2.5px solid var(--purple);
+  background:linear-gradient(240deg,rgba(44,18,74,.74),rgba(6,11,18,.82))}
+#zoneBar .pill.supply{border-color:rgba(255,209,102,.32);border-right:2.5px solid var(--gold);
+  background:linear-gradient(240deg,rgba(44,30,10,.72),rgba(6,11,18,.82))}
+
 /* ---------- compact translucent radar / minimap ---------- */
-#minimapWrap{position:absolute;top:14px;right:16px;width:162px;padding:6px;
+#minimapWrap{position:relative;width:162px;flex:0 0 auto;padding:6px;
   background:rgba(6,11,18,.72);border:1px solid rgba(132,198,224,.18);border-radius:7px;
   backdrop-filter:blur(8px);box-shadow:0 8px 22px rgba(0,0,0,.36)}
 #minimapWrap.hidden{display:none}
@@ -217,7 +231,7 @@ body.in-game #ui{opacity:1}
   margin-top:4px;font-weight:700;opacity:.78}
 
 /* ---------- slim kill feed ---------- */
-#feed{position:absolute;top:194px;right:16px;width:258px;display:flex;
+#feed{position:relative;width:258px;display:flex;
   flex-direction:column;gap:4px;align-items:flex-end}
 #feed.hidden{display:none}
 .feedItem{background:rgba(7,13,20,.68);
@@ -768,11 +782,49 @@ kbd{font-family:inherit;font-size:8.5px;font-weight:800;letter-spacing:.07em;
 .hint{margin-top:12px;font-size:10px;color:var(--muted);letter-spacing:.06em}
 
 /* ---------- Settings Overlay ---------- */
-.settingsPanel{width:min(740px,95vw);max-height:92vh;overflow-y:auto}
-.settingsBody{display:flex;flex-direction:column;gap:14px;width:100%;text-align:left}
-.settingsCard{padding:16px 18px;border-radius:6px;background:rgba(5,10,16,.65);
+.settingsPanel{width:min(760px,95vw);max-height:92vh;overflow-y:auto}
+.settingsBody{display:flex;flex-direction:column;gap:12px;width:100%;text-align:left}
+.settingsCard{padding:14px 16px;border-radius:6px;background:rgba(5,10,16,.65);
   border:1px solid var(--line)}
 .settingHint{margin-top:10px;font-size:10px;line-height:1.45;color:var(--muted)}
+.cardHeadRight{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.langQuickChip{padding:5px 9px;font-size:8.5px;color:var(--cyan);border-color:rgba(94,231,255,.38)}
+
+/* Crosshair customizer & keybinds in Settings */
+.crosshairGrid{display:grid;grid-template-columns:84px minmax(0,1fr);gap:14px;align-items:center}
+#crosshairPreview{width:84px;height:84px;border-radius:6px;border:1px solid rgba(94,231,255,.32);
+  background:#07111a;display:block}
+.crosshairControls{display:flex;flex-direction:column;gap:9px;min-width:0}
+.crossRow{display:grid;grid-template-columns:72px minmax(0,1fr);align-items:center;gap:10px}
+.crossRow>span{font-size:8px;font-weight:800;letter-spacing:.18em;color:var(--muted)}
+.compactOptions button{padding:6px 5px;font-size:8px}
+.swatchRow{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.swatchBtn{width:22px;height:22px;border-radius:50%;border:2px solid rgba(255,255,255,.22);
+  background:var(--sw);cursor:pointer;transition:transform .14s ease,box-shadow .14s ease,border-color .14s ease}
+.swatchBtn:hover{transform:scale(1.12)}
+.swatchBtn.selected{border-color:#fff;transform:scale(1.15);box-shadow:0 0 12px var(--sw)}
+.crossSliderWrap{display:flex;align-items:center;gap:10px}
+.crossSliderWrap input{flex:1;height:4px;appearance:none;-webkit-appearance:none;
+  background:linear-gradient(90deg,rgba(94,231,255,.8),rgba(140,190,210,.22));border-radius:99px;cursor:pointer}
+.crossSliderWrap input::-webkit-slider-thumb{appearance:none;-webkit-appearance:none;width:13px;height:13px;
+  border-radius:50%;background:#5ee7ff;border:0;box-shadow:0 0 10px rgba(94,231,255,.65)}
+.crossSliderWrap b{font-size:10px;color:#dffaff;min-width:34px;text-align:right;font-variant-numeric:tabular-nums}
+
+.keybindGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px 14px}
+.kbItem{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;
+  border-radius:5px;background:rgba(10,18,28,.66);border:1px solid rgba(132,198,224,.14)}
+.kbItem span{font-size:9.5px;font-weight:700;letter-spacing:.08em;color:#cde0ea}
+.kbBtn{font-family:inherit;font-size:9px;font-weight:800;letter-spacing:.12em;min-width:66px;
+  padding:5px 10px;border-radius:4px;cursor:pointer;color:#e8f8ff;
+  background:rgba(94,231,255,.1);border:1px solid rgba(94,231,255,.38);border-bottom-width:2px;
+  transition:background .14s,border-color .14s,color .14s}
+.kbBtn:hover{background:rgba(94,231,255,.2);border-color:rgba(94,231,255,.8);color:#fff}
+.kbBtn.listening{background:rgba(255,209,102,.2);border-color:#ffd166;color:#ffe6a1;animation:blink 1s infinite}
+
+/* Finisher preview badge & Career Veteran highlight */
+.finisherPreview{display:grid;place-items:center;box-shadow:0 0 18px var(--c),inset 0 0 14px rgba(0,0,0,.35)}
+.finisherPreview span{font-size:20px;color:#fff;text-shadow:0 0 12px var(--c)}
+.masteryRow.veteran .masteryLevel{color:#7ef2ff}
 
 /* ---------- Quality & Audio Controls ---------- */
 .qualityControl{display:flex;flex-direction:column;gap:8px;text-align:left;width:100%}
@@ -936,7 +988,8 @@ kbd{font-family:inherit;font-size:8.5px;font-weight:800;letter-spacing:.07em;
 .graphics-low .lobbyHeader,.graphics-low .lobbyFooter,.graphics-low .tacticalCard,
 .graphics-low .rankProgressBox,.graphics-low .touchStick,.graphics-low .touchAction{
   backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
-.graphics-verylow #topbar,.graphics-low #topbar{background:rgba(6,11,18,.94)}
+.graphics-verylow #topbar,.graphics-low #topbar,
+.graphics-verylow #zoneBar .pill,.graphics-low #zoneBar .pill{background:rgba(6,11,18,.94)}
 .graphics-verylow .tacticalCard,.graphics-low .tacticalCard{background:rgba(9,16,25,.95)}
 .graphics-verylow .screen,.graphics-low .screen{background:rgba(4,7,12,.94)}
 .graphics-verylow #menu.lobbyScreen,.graphics-low #menu.lobbyScreen{
@@ -948,9 +1001,9 @@ kbd{font-family:inherit;font-size:8.5px;font-weight:800;letter-spacing:.07em;
 .graphics-verylow #vignette.low{animation:none!important}
 .graphics-verylow #hudWeapon,.graphics-verylow #stormWarn i,
 .graphics-verylow #menuShowcase,.graphics-verylow h1 span{filter:none!important}
-.graphics-verylow #topbar,.graphics-verylow #pickupPrompt,.graphics-verylow .tacticalCard,
+.graphics-verylow #topbar,.graphics-verylow #zoneBar .pill,.graphics-verylow #pickupPrompt,.graphics-verylow .tacticalCard,
 .graphics-verylow .slotCard.active{box-shadow:none!important}
-.graphics-medium #topbar,.graphics-medium #minimapWrap,
+.graphics-medium #topbar,.graphics-medium #zoneBar .pill,.graphics-medium #minimapWrap,
 .graphics-medium .tacticalCard,.graphics-medium .lobbyHeader,.graphics-medium .lobbyFooter{
   backdrop-filter:blur(4px)}
 
@@ -1020,10 +1073,12 @@ kbd{font-family:inherit;font-size:8.5px;font-weight:800;letter-spacing:.07em;
   .deployText small{display:none}
 
   /* Modals & HUD Mobile */
-  .pill.supply{display:none}
-  #minimapWrap{width:124px;padding:4px}
+  #radarRow{gap:6px}
+  #zoneBar{gap:4px}
+  #zoneBar .pill{height:23px;padding:0 7px;font-size:7.5px;letter-spacing:.08em}
+  #minimapWrap{width:120px;padding:4px}
   #minimapLabel{font-size:6.5px;margin-top:3px}
-  #feed{top:186px;width:200px}
+  #feed{width:200px}
   #bottomLeft{left:10px;bottom:14px;width:206px}
   .hudPlate{padding:7px 9px}
   #bottomRight{right:10px;bottom:14px;width:206px}
@@ -1053,6 +1108,9 @@ kbd{font-family:inherit;font-size:8.5px;font-weight:800;letter-spacing:.07em;
   .careerBank{flex:1 1 100%;flex-direction:row;align-items:center;justify-content:space-between;
     padding:8px 0 0;border-top:1px solid var(--line);border-left:0}
   .careerBank b{font-size:17px}
+  .crosshairGrid{grid-template-columns:1fr;justify-items:center}
+  .crosshairControls{width:100%}
+  .keybindGrid{grid-template-columns:1fr}
   .careerStats{grid-template-columns:repeat(2,minmax(0,1fr))}
   .careerWeapons{grid-template-columns:1fr}
   .careerStat b{font-size:17px}
@@ -1067,16 +1125,15 @@ kbd{font-family:inherit;font-size:8.5px;font-weight:800;letter-spacing:.07em;
   #bottomLeft{bottom:164px}
   #bottomRight{bottom:232px;gap:4px}
   #loadoutBar{margin-bottom:1px}
-  #minimapWrap{top:58px}
-  #feed{top:208px}
+  #topRightDock{top:46px;right:10px}
   #topLeftDock{top:8px;left:10px;max-width:calc(100vw - 20px)}
   #practiceBar,#safeZoneControls{display:none}
-  .pauseAction{left:10px;top:56px}
-  .safeAction{left:60px;top:56px}
-  .armoryAction{left:112px;top:56px}
-  #safeZonePanel{top:110px;left:10px;width:min(254px,calc(100vw - 20px));max-height:calc(100vh - 286px);padding:9px 10px}
-  #stormWarn,#toast{top:58px}
-  #streakBanner{top:96px}
+  .pauseAction{left:10px;top:46px}
+  .safeAction{left:60px;top:46px}
+  .armoryAction{left:112px;top:46px}
+  #safeZonePanel{top:100px;left:10px;width:min(254px,calc(100vw - 20px));max-height:calc(100vh - 276px);padding:9px 10px}
+  #stormWarn,#toast{top:98px}
+  #streakBanner{top:134px}
   .touchAction,.touchStick{pointer-events:auto}
 }
 
@@ -1090,10 +1147,14 @@ kbd{font-family:inherit;font-size:8.5px;font-weight:800;letter-spacing:.07em;
   #topbar{gap:3px}
   .pill{padding:0 7px;font-size:7.5px;letter-spacing:.08em;height:21px}
   .pill b{font-size:10px}
-  #topLeftDock{top:6px;left:10px;max-width:calc(100vw - 134px)}
-  #minimapWrap{width:108px;top:44px;right:10px;padding:4px}
+  #topLeftDock{top:6px;left:10px;max-width:calc(100vw - 290px)}
+  #topRightDock{top:6px;right:10px;gap:4px}
+  #radarRow{gap:6px}
+  #zoneBar{gap:4px}
+  #zoneBar .pill{height:22px;padding:0 7px;font-size:7.5px;letter-spacing:.08em}
+  #minimapWrap{width:108px;padding:4px}
   #minimapLabel{display:none}
-  #feed{top:160px;width:184px}
+  #feed{width:184px}
   #bottomLeft{bottom:10px;left:10px;width:196px}
   .hudPlate{padding:6px 8px}
   #hudPortrait{width:30px;height:30px}
@@ -1125,19 +1186,19 @@ kbd{font-family:inherit;font-size:8.5px;font-weight:800;letter-spacing:.07em;
   @supports (padding:max(0px)){
     #topLeftDock{top:max(8px,env(safe-area-inset-top));
       left:max(10px,env(safe-area-inset-left))}
-    #minimapWrap{top:calc(max(8px,env(safe-area-inset-top)) + 48px);
-      right:max(12px,env(safe-area-inset-right))}
+    #topRightDock{top:calc(max(8px,env(safe-area-inset-top)) + 38px);
+      right:max(10px,env(safe-area-inset-right))}
     #bottomLeft{left:max(10px,env(safe-area-inset-left))}
     #bottomRight{right:max(10px,env(safe-area-inset-right))}
     .leftStick{left:max(16px,env(safe-area-inset-left))}
     .rightStick{right:max(16px,env(safe-area-inset-right))}
     .pauseAction{left:max(10px,env(safe-area-inset-left));
-      top:calc(max(8px,env(safe-area-inset-top)) + 48px)}
+      top:calc(max(8px,env(safe-area-inset-top)) + 38px)}
     .safeAction{left:calc(max(10px,env(safe-area-inset-left)) + 50px);
-      top:calc(max(8px,env(safe-area-inset-top)) + 48px)}
+      top:calc(max(8px,env(safe-area-inset-top)) + 38px)}
     .armoryAction{left:calc(max(10px,env(safe-area-inset-left)) + 102px);
-      top:calc(max(8px,env(safe-area-inset-top)) + 48px)}
-    #safeZonePanel{top:calc(max(8px,env(safe-area-inset-top)) + 102px);
+      top:calc(max(8px,env(safe-area-inset-top)) + 38px)}
+    #safeZonePanel{top:calc(max(8px,env(safe-area-inset-top)) + 92px);
       left:max(10px,env(safe-area-inset-left))}
   }
 }
@@ -1146,7 +1207,11 @@ kbd{font-family:inherit;font-size:8.5px;font-weight:800;letter-spacing:.07em;
 @media (min-width:1900px){
   .lobbyStage{grid-template-columns:360px minmax(0,1fr) 360px;padding:24px 36px;gap:28px}
   .lobbyHeader,.lobbyFooter{padding-left:36px;padding-right:36px}
-  #topLeftDock{top:18px;left:22px;max-width:calc(100vw - 240px)}
+  #topLeftDock{top:18px;left:22px;max-width:calc(100vw - 420px)}
+  #topRightDock{top:18px;right:22px;gap:8px}
+  #radarRow{gap:10px}
+  #zoneBar{gap:6px}
+  #zoneBar .pill{height:30px;padding:0 12px;font-size:9.5px}
   #topbar{gap:5px;padding:4px}
   .pill{padding:0 12px;font-size:9.5px;height:28px}
   .pill b{font-size:13px}
@@ -1154,7 +1219,7 @@ kbd{font-family:inherit;font-size:8.5px;font-weight:800;letter-spacing:.07em;
   #stormWarn,#toast{top:18px}
   #streakBanner{top:62px}
   #minimapWrap{width:184px}
-  #feed{top:224px;width:290px}
+  #feed{width:290px}
   #bottomLeft,#bottomRight,#safeZonePanel{width:300px}
   #bottomLeft{left:22px;bottom:22px}
   #bottomRight{right:22px;bottom:22px}
@@ -1163,8 +1228,9 @@ kbd{font-family:inherit;font-size:8.5px;font-weight:800;letter-spacing:.07em;
 }
 @media (min-width:2600px){
   .pill{font-size:10.5px;padding:0 14px;height:30px}
+  #zoneBar .pill{height:32px;padding:0 14px;font-size:10.5px}
   #minimapWrap{width:208px}
-  #feed{top:256px;width:320px}
+  #feed{width:320px}
   #bottomLeft,#bottomRight,#safeZonePanel{width:332px}
   #mag{font-size:48px}
 }
@@ -1174,13 +1240,14 @@ kbd{font-family:inherit;font-size:8.5px;font-weight:800;letter-spacing:.07em;
   #topbar{gap:3px}
   #topbar .pill{padding:0 7px;font-size:7.5px;letter-spacing:.08em}
   #topbar .pill b{font-size:10px}
-  #feed{top:234px;width:196px}
-  #stormWarn{top:62px;font-size:8.5px;padding:5px 10px;
+  #feed{width:196px}
+  #stormWarn{top:102px;font-size:8.5px;padding:5px 10px;
     max-width:calc(100vw - 24px);white-space:nowrap}
   #stormWarn b{font-size:8.5px}
-  #toast{top:62px}
+  #toast{top:102px}
 }
 @media (max-width:480px) and (min-height:561px){
+  #minimapWrap{width:106px}
   #bottomLeft,#bottomRight{width:172px}
   #hudWeapon{width:70px;height:20px}
   #weaponName{font-size:8px;letter-spacing:.14em}

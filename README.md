@@ -61,6 +61,27 @@ Engineered to stay smooth on weak laptops/phones while scaling up for high-end P
 
 ## Releases
 
+### v0.1.5
+- **2 New Tactical Weapons (14 Total) & SMG Accuracy Tuning**:
+  - **Ricochet (`RC`, Tier 4)**: Fires high-velocity energy discs that bounce up to 2 times off walls, cover, and enemy Shield Domes with a `+15%` damage boost per bounce for bank-shot trick eliminations.
+  - **Cryo Beam (`CR`, Tier 4)**: Close-to-mid-range pressurized frost projector that fires rapid icy bolts, chilling and slowing targets (`0.78s` slow) to control corners and flush cover.
+  - **SMG Accuracy Tuning**: Tightened SMG base spread (`0.052 → 0.024`), bloom cap (`0.026`), moving spread multiplier (`1.22×`), and projectile velocity (`1820 px/s`) for noticeably straighter beams while keeping Assault Rifles (`0.012`) superior at mid/long range.
+- **2 New Tactical Gadgets (5 Total)**:
+  - **Thermite (`THM`)**: Ignites a `4.5s` burning fire pool (`34 DPS`) that denies chokepoints, shreds wooden crates (`2.35×`), ignites barrels, and forces bots out of cover.
+  - **Shield Dome (`SHD`)**: Deploys a `5.5s` / `260 HP` holographic cyan energy dome that blocks enemy bullets (and reflects Ricochet discs) so you can heal or reload safely in open terrain.
+- **New Map Environmental Interactions**:
+  - **Blue Cryo / EMP Barrels**: Alongside red explosive barrels, blue Cryo barrels detonate in a wide frost-EMP wave (`178px`) that strips armor (`-45`), deals `38` damage, slows (`3.0s`), and jams weapons (`2.2s`).
+  - **District Shield Pylons**: 6 hexagonal armor-recharging pylons placed across major districts (`+18 ARM/s` up to `120` charge per cycle, `28s` recharge cooldown, with live electric tether beams & minimap markers).
+  - **Holographic Stealth Brushes**: 14 energy-foliage stealth patches that cloak operators (`STEALTH · CLOAKED`) and break bot acquisition beyond `115px` until firing.
+- **Progression, Finishers & Settings QoL**:
+  - **Finisher VFX Shop (Armory)**: 6 elimination Finisher effects (`Standard`, `Solar Nova`, `Cryo Shatter`, `Ion Strike`, `Void Collapse`, `Supernova`) purchasable with AURA in the Armory and triggered live on eliminations.
+  - **Weapon Mastery Tracer Perks**: Reaching `25+` eliminations (`VETERAN`) unlocks enhanced **Glow Tracers** and `50+` (`MASTER`) unlocks **Apex Golden Tracers** + HUD mastery star badge.
+  - **Settings Overhaul**: Added **Crosshair Customizer** (4 styles, 6 colors, size slider, live preview), **Custom Keybinds** (click-to-rebind with swap & reset), and full **English / Vietnamese (`EN` / `VI`)** interface switcher.
+- **HUD & Performance Polish**:
+  - Moved **Zone & Cache** telemetry directly beside the top-right Radar (`#topRightDock`) and consolidated **ELIMS / ALIVE / AURA** cleanly at the top-left.
+  - Fixed `RETURN TO SAFE ZONE` button appearing when pausing in Royale mode and fixed Pause/Countdown, DDA Line-of-Sight, cover-first bullet collision, swept anti-tunneling Dash/Boost collision, EMP burst cancellation, and Safe Zone Quick Armory synchronization.
+  - Scaled all new VFX (hex dome mesh, firelight halos, frost crystals, pylon glows) cleanly across `POTATO` → `ULTRA` tiers.
+
 ### v0.1.4
 - **Dedicated Separate Safe Zone Map (Practice Mode)**:
   - Moved the Practice **Safe Zone** onto its own standalone `1400×820` orbital Tactical Armory & Ballistic Firing Range map — completely isolated in rendering, physics, projectiles, particles, decals, and spatial audio from the full `4400×4400` Combat Arena.

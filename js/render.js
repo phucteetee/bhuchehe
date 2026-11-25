@@ -629,6 +629,254 @@ function drawBoostPads() {
   ctx.restore();
 }
 
+function drawStealthZones() {
+  if (!stealthZones.length) return;
+  const v = viewBounds(120);
+  const fx = getGraphicsSettings().fx;
+  const t = game.time;
+  ctx.save();
+  for (let i = 0; i < stealthZones.length; i++) {
+    const sz = stealthZones[i];
+    if (sz.x + sz.r < v.l || sz.x - sz.r > v.r || sz.y + sz.r < v.t || sz.y - sz.r > v.b) continue;
+    const pulse = 0.5 + 0.5 * Math.sin(t * 2.2 + sz.seed);
+    ctx.save();
+    ctx.translate(sz.x, sz.y);
+    // Soft translucent foliage base
+    ctx.fillStyle = 'rgba(20,96,74,0.22)';
+    ctx.beginPath();
+    ctx.arc(0, 0, sz.r, 0, TAU);
+    ctx.fill();
+    // Crisp stealth perimeter ring (readable even on Potato)
+    ctx.strokeStyle = `rgba(111,242,176,${0.26 + pulse * 0.16})`;
+    ctx.lineWidth = 1.6;
+    ctx.setLineDash([8, 8]);
+    ctx.beginPath();
+    ctx.arc(0, 0, sz.r - 1, 0, TAU);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // Energy foliage fronds (scaled to graphics tier)
+    const leaves = fx >= 2 ? 7 : fx >= 1 ? 5 : 3;
+    for (let k = 0; k < leaves; k++) {
+      const a = sz.seed + (k / leaves) * TAU + (fx >= 1 ? Math.sin(t * 1.4 + k) * 0.08 : 0);
+      const dist = sz.r * (0.28 + (k % 2) * 0.24);
+      ctx.fillStyle = k % 2 ? 'rgba(66,196,144,0.26)' : 'rgba(94,231,200,0.18)';
+      ctx.beginPath();
+      ctx.ellipse(Math.cos(a) * dist, Math.sin(a) * dist, sz.r * 0.34, sz.r * 0.2, a, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+function drawShieldPylons() {
+  if (!shieldPylons.length) return;
+  const v = viewBounds(120);
+  const fx = getGraphicsSettings().fx;
+  const t = game.time;
+  ctx.save();
+  for (let i = 0; i < shieldPylons.length; i++) {
+    const py = shieldPylons[i];
+    if (py.x + py.auraR < v.l || py.x - py.auraR > v.r || py.y + py.auraR < v.t || py.y - py.auraR > v.b) continue;
+    const ready = py.cooldown <= 0;
+    const pulse = 0.5 + 0.5 * Math.sin(t * 3.4 + py.pulse);
+    ctx.save();
+    ctx.translate(py.x, py.y);
+
+    // Recharge field perimeter
+    ctx.fillStyle = ready ? `rgba(70,229,255,${0.05 + pulse * 0.03})` : 'rgba(60,90,105,0.04)';
+    ctx.beginPath();
+    ctx.arc(0, 0, py.auraR, 0, TAU);
+    ctx.fill();
+    ctx.strokeStyle = ready ? `rgba(94,231,255,${0.32 + pulse * 0.24})` : 'rgba(130,170,185,0.18)';
+    ctx.lineWidth = ready ? 1.8 : 1.2;
+    ctx.setLineDash(ready ? [10, 8] : [4, 8]);
+    ctx.beginPath();
+    ctx.arc(0, 0, py.auraR, 0, TAU);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Pylon base shadow & octagonal pedestal
+    ctx.fillStyle = 'rgba(0,0,0,0.44)';
+    ctx.beginPath();
+    ctx.ellipse(2, 6, py.r * 1.12, py.r * 0.72, 0, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = '#0d1a24';
+    ctx.beginPath();
+    for (let k = 0; k < 6; k++) {
+      const a = (k / 6) * TAU + Math.PI / 6;
+      const px = Math.cos(a) * py.r;
+      const py2 = Math.sin(a) * py.r;
+      if (k === 0) ctx.moveTo(px, py2); else ctx.lineTo(px, py2);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = ready ? '#5ee7ff' : '#4f6d7a';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Charge / Cooldown arc around pedestal
+    const pct = ready ? clamp(py.charge / py.maxCharge, 0, 1) : clamp(1 - py.cooldown / py.maxCooldown, 0, 1);
+    ctx.strokeStyle = ready ? '#7ef7ff' : '#ff9f45';
+    ctx.lineWidth = 2.6;
+    ctx.beginPath();
+    ctx.arc(0, 0, py.r + 5, -Math.PI / 2, -Math.PI / 2 + TAU * pct);
+    ctx.stroke();
+
+    // Floating shield crystal core
+    ctx.fillStyle = ready ? '#7ef7ff' : '#4a606c';
+    ctx.beginPath();
+    ctx.moveTo(0, -9); ctx.lineTo(7, -3); ctx.lineTo(7, 3);
+    ctx.lineTo(0, 9); ctx.lineTo(-7, 3); ctx.lineTo(-7, -3);
+    ctx.closePath();
+    ctx.fill();
+    if (ready && fx >= 1) {
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(0, -1, 2.6 + pulse * 0.8, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // Render active electric recharge tether beams to operators
+  ctx.globalCompositeOperation = 'lighter';
+  for (const e of allEntities()) {
+    if (!e.alive || !e.pylonLink) continue;
+    const py = e.pylonLink;
+    ctx.strokeStyle = 'rgba(94,231,255,0.45)';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(py.x, py.y); ctx.lineTo(e.x, e.y);
+    ctx.stroke();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(py.x, py.y); ctx.lineTo(e.x, e.y);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawHazards() {
+  if (!hazards.length) return;
+  const inSafe = isPlayerInSafeMap();
+  const v = viewBounds(160);
+  const fx = getGraphicsSettings().fx;
+  const t = game.time;
+  ctx.save();
+  for (let i = 0; i < hazards.length; i++) {
+    const hz = hazards[i];
+    if (!!hz.inSafeZone !== inSafe) continue;
+    if (hz.x + hz.r < v.l || hz.x - hz.r > v.r || hz.y + hz.r < v.t || hz.y - hz.r > v.b) continue;
+    const fade = clamp(hz.life / Math.min(0.8, hz.maxLife), 0, 1);
+    const flicker = 0.84 + 0.16 * Math.sin(t * 18 + hz.seed);
+    ctx.save();
+    ctx.translate(hz.x, hz.y);
+    // Fiery pool
+    ctx.globalAlpha = 0.24 * fade * flicker;
+    ctx.fillStyle = '#ff4d1a';
+    ctx.beginPath();
+    ctx.arc(0, 0, hz.r, 0, TAU);
+    ctx.fill();
+    // Hot inner core
+    ctx.globalAlpha = 0.3 * fade * flicker;
+    ctx.fillStyle = '#ffae3d';
+    ctx.beginPath();
+    ctx.arc(0, 0, hz.r * 0.56, 0, TAU);
+    ctx.fill();
+    // Crisp animated danger boundary
+    ctx.globalAlpha = 0.72 * fade;
+    ctx.strokeStyle = '#ff7a3d';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([8, 6]);
+    ctx.lineDashOffset = -t * 28;
+    ctx.beginPath();
+    ctx.arc(0, 0, hz.r, 0, TAU);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // Dancing flame tongues (Med+)
+    if (fx >= 1) {
+      const tongues = fx >= 2 ? 7 : 4;
+      ctx.globalCompositeOperation = 'lighter';
+      for (let k = 0; k < tongues; k++) {
+        const a = hz.seed + (k / tongues) * TAU + t * (k % 2 ? 1.1 : -0.9);
+        const rad = hz.r * (0.32 + 0.34 * ((k * 0.37) % 1));
+        const ox = Math.cos(a) * rad;
+        const oy = Math.sin(a) * rad;
+        ctx.globalAlpha = 0.42 * fade;
+        ctx.fillStyle = k % 2 ? '#ff6d2e' : '#ffd166';
+        ctx.beginPath();
+        ctx.arc(ox, oy, 10 + Math.sin(t * 14 + k * 2) * 3, 0, TAU);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+function drawDomes() {
+  if (!domes.length) return;
+  const inSafe = isPlayerInSafeMap();
+  const v = viewBounds(160);
+  const fx = getGraphicsSettings().fx;
+  const t = game.time;
+  ctx.save();
+  for (let i = 0; i < domes.length; i++) {
+    const dm = domes[i];
+    if (!!dm.inSafeZone !== inSafe) continue;
+    if (dm.x + dm.r < v.l || dm.x - dm.r > v.r || dm.y + dm.r < v.t || dm.y - dm.r > v.b) continue;
+    const fade = clamp(dm.life / Math.min(0.6, dm.maxLife), 0, 1);
+    const hpRatio = clamp(dm.hp / dm.maxHp, 0, 1);
+    const flash = dm.hitFlash > 0 ? clamp(dm.hitFlash / 0.16, 0, 1) : 0;
+    ctx.save();
+    ctx.translate(dm.x, dm.y);
+
+    // Translucent cyan energy barrier interior
+    ctx.globalAlpha = (0.1 + flash * 0.14) * fade;
+    ctx.fillStyle = flash > 0.2 ? '#ccfaff' : '#46e5ff';
+    ctx.beginPath();
+    ctx.arc(0, 0, dm.r, 0, TAU);
+    ctx.fill();
+
+    // Hexagonal lattice lines on High/Ultra
+    if (fx >= 2) {
+      ctx.globalAlpha = 0.2 * fade;
+      ctx.strokeStyle = '#7ef7ff';
+      ctx.lineWidth = 1;
+      for (let ring = 0.45; ring <= 0.85; ring += 0.4) {
+        ctx.beginPath();
+        for (let k = 0; k < 6; k++) {
+          const a = (k / 6) * TAU + t * 0.35;
+          const px = Math.cos(a) * dm.r * ring;
+          const py = Math.sin(a) * dm.r * ring;
+          if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.stroke();
+      }
+    }
+
+    // Outer hardened shield rim + HP progress arc
+    ctx.globalAlpha = 0.85 * fade;
+    ctx.strokeStyle = flash > 0.2 ? '#ffffff' : '#5ee7ff';
+    ctx.lineWidth = 2.6 + flash * 1.8;
+    ctx.beginPath();
+    ctx.arc(0, 0, dm.r, 0, TAU);
+    ctx.stroke();
+
+    // Remaining HP ring inside edge
+    ctx.strokeStyle = hpRatio > 0.4 ? '#9efaff' : '#ffb347';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, dm.r - 5, -Math.PI / 2, -Math.PI / 2 + TAU * hpRatio);
+    ctx.stroke();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
 function drawObstaclesAndBarrels() {
   const v = viewBounds(90);
   const settings = getGraphicsSettings();
@@ -684,35 +932,38 @@ function drawObstaclesAndBarrels() {
     ctx.beginPath();
     ctx.ellipse(bar.x + 3, bar.y + 7, bar.r * 1.05, bar.r * 0.65, 0, 0, TAU);
     ctx.fill();
-    // Burning warning ring
+    const isCryo = bar.kind === 'cryo';
+    // Burning / destabilizing warning ring
     if (bar.burnT > 0) {
       const blink = 0.5 + 0.5 * Math.sin(t * 26);
-      ctx.strokeStyle = `rgba(255,110,60,${0.4 + blink * 0.5})`;
+      ctx.strokeStyle = isCryo
+        ? `rgba(94,231,255,${0.45 + blink * 0.5})`
+        : `rgba(255,110,60,${0.4 + blink * 0.5})`;
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(bar.x, bar.y, bar.r + 8 + blink * 5, 0, TAU);
       ctx.stroke();
     }
     // 2.5D cylinder base
-    ctx.fillStyle = '#6c1e16';
+    ctx.fillStyle = isCryo ? '#124259' : '#6c1e16';
     ctx.beginPath();
     ctx.arc(bar.x, bar.y + 3, bar.r, 0, TAU);
     ctx.fill();
     // Top cap
-    ctx.fillStyle = bar.hitFlash > 0 ? '#ffe5b8' : '#d63e2e';
+    ctx.fillStyle = bar.hitFlash > 0 ? '#e6fbff' : (isCryo ? '#1fa8cf' : '#d63e2e');
     ctx.beginPath();
     ctx.arc(bar.x, bar.y - 1, bar.r - 1, 0, TAU);
     ctx.fill();
-    ctx.strokeStyle = '#290907';
+    ctx.strokeStyle = isCryo ? '#08212e' : '#290907';
     ctx.lineWidth = 2.2;
     ctx.stroke();
-    // Hazard yellow stripe ring & cap detail
-    ctx.strokeStyle = '#ffd166';
+    // Hazard stripe ring & cap detail
+    ctx.strokeStyle = isCryo ? '#c2fbff' : '#ffd166';
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(bar.x, bar.y - 1, bar.r * 0.58, 0, TAU);
     ctx.stroke();
-    ctx.fillStyle = '#290907';
+    ctx.fillStyle = isCryo ? '#08212e' : '#290907';
     ctx.beginPath();
     ctx.arc(bar.x + 3.5, bar.y - 3.5, 2.5, 0, TAU);
     ctx.fill();
@@ -1177,6 +1428,36 @@ function drawGunModel(c, w, accent, fancy) {
       rr(ctx, L * 0.22, -t / 2 - 8, 21, 6, 3); ctx.fill();
       ctx.strokeStyle = accent; ctx.lineWidth = 1.2; ctx.stroke();
       ctx.fillStyle = accent; ctx.fillRect(L - 8, -t / 2 - 2, 4, t + 4);
+      break;
+    case 'ricochet':
+      // Twin magnetic disc accelerator prongs + glowing cyan disc chamber
+      ctx.fillStyle = '#0a1c24';
+      rr(ctx, L * 0.24, -t / 2 - 6, 17, 5, 2); ctx.fill();
+      ctx.strokeStyle = accent; ctx.lineWidth = 1.2; ctx.stroke();
+      ctx.fillStyle = accent;
+      ctx.beginPath(); ctx.arc(L * 0.56, 0, 4.2, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(L * 0.56, 0, 1.8, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#192933';
+      ctx.fillRect(L * 0.68, -t / 2 - 2.2, L * 0.38, 3.2);
+      ctx.fillRect(L * 0.68, t / 2 - 1, L * 0.38, 3.2);
+      break;
+    case 'cryo':
+      // Twin pressurized cryo frost canisters + wide diffuser nozzle
+      ctx.fillStyle = '#0e2836';
+      rr(ctx, L * 0.22, -t / 2 - 5.5, 20, 5.5, 2.5); ctx.fill();
+      ctx.strokeStyle = accent; ctx.lineWidth = 1.3; ctx.stroke();
+      rr(ctx, L * 0.22, t / 2, 20, 5.5, 2.5); ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#bff8ff';
+      ctx.fillRect(L * 0.28, -t / 2 - 3.6, 12, 1.8);
+      ctx.fillRect(L * 0.28, t / 2 + 1.8, 12, 1.8);
+      ctx.fillStyle = '#1c323d';
+      ctx.beginPath();
+      ctx.moveTo(L - 4, -t * 0.38); ctx.lineTo(L + 8, -t * 0.58);
+      ctx.lineTo(L + 8, t * 0.58); ctx.lineTo(L - 4, t * 0.38);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = accent; ctx.lineWidth = 1.2; ctx.stroke();
       break;
     case 'railgun':
       // Twin electromagnetic split rails + glowing core strip
@@ -1655,6 +1936,9 @@ function drawEntity(e) {
   const sy = (e.scaleY != null ? e.scaleY : 1) * spawnScale;
 
   ctx.save();
+  if (e.stealth) {
+    ctx.globalAlpha = e.isPlayer ? 0.52 : 0.28;
+  }
   // Ground shadow synced subtly with vertical bob
   const shScale = (1 - bob * 0.025) * spawnScale;
   ctx.fillStyle = 'rgba(0,0,0,0.44)';
@@ -1833,6 +2117,8 @@ const BULLET_TRAILS = {
   pulse: { len: 30, width: 2.8 },
   dmr: { len: 38, width: 2.8 },
   lmg: { len: 24, width: 2.7 },
+  ricochet: { len: 30, width: 3.2 },
+  cryo: { len: 24, width: 4.4 },
   sniper: { len: 48, width: 3.4 },
   railgun: { len: 62, width: 4.0 },
   minigun: { len: 21, width: 2.3 },
@@ -1903,30 +2189,72 @@ function drawBullets() {
       continue;
     }
 
+    if (b.disc) {
+      // Spinning Ricochet Energy Disc + luminous bounce trail
+      const tail = 34;
+      ctx.strokeStyle = b.bounceCount > 0 ? '#ffd166' : b.color;
+      ctx.globalAlpha = 0.42;
+      ctx.lineWidth = 4.2;
+      ctx.beginPath();
+      ctx.moveTo(b.x - ux * tail, b.y - uy * tail);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+      ctx.globalAlpha = 0.95;
+      ctx.strokeStyle = b.bounceCount > 0 ? '#ffe596' : '#7ef7ff';
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, 6.2, 0, TAU);
+      ctx.stroke();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, 2.8, 0, TAU);
+      ctx.fill();
+      continue;
+    }
+    if (b.cryo) {
+      // Billowing pressurized Cryo frost bolt
+      const tail = 24;
+      ctx.strokeStyle = '#76e8ff';
+      ctx.globalAlpha = fast ? 0.42 : 0.24;
+      ctx.lineWidth = fast ? 5.5 : 10;
+      ctx.beginPath();
+      ctx.moveTo(b.x - ux * tail, b.y - uy * tail);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+      ctx.globalAlpha = 0.88;
+      ctx.fillStyle = '#dffbff';
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, 4.4, 0, TAU);
+      ctx.fill();
+      continue;
+    }
+
     const cfg = BULLET_TRAILS[b.weapon] || BULLET_TRAILS.rifle;
-    const tail = cfg.len;
+    const mastery = b.masteryTier || 0;
+    const tail = cfg.len * (mastery >= 4 ? 1.28 : mastery >= 3 ? 1.14 : 1);
+    const trailCol = mastery >= 4 ? '#ffd166' : b.color;
     if (!fast) {
-      ctx.strokeStyle = b.color;
-      ctx.globalAlpha = 0.14;
-      ctx.lineWidth = cfg.width * 2.8;
+      ctx.strokeStyle = trailCol;
+      ctx.globalAlpha = mastery >= 3 ? 0.24 : 0.14;
+      ctx.lineWidth = cfg.width * (mastery >= 4 ? 3.5 : mastery >= 3 ? 3.1 : 2.8);
       ctx.beginPath();
       ctx.moveTo(b.x - ux * tail, b.y - uy * tail);
       ctx.lineTo(b.x, b.y);
       ctx.stroke();
     }
-    ctx.strokeStyle = b.color;
-    ctx.globalAlpha = 0.55;
-    ctx.lineWidth = cfg.width;
+    ctx.strokeStyle = trailCol;
+    ctx.globalAlpha = mastery >= 3 ? 0.78 : 0.55;
+    ctx.lineWidth = cfg.width * (mastery >= 4 ? 1.25 : 1);
     ctx.beginPath();
     ctx.moveTo(b.x - ux * tail, b.y - uy * tail);
     ctx.lineTo(b.x, b.y);
     ctx.stroke();
 
     ctx.globalAlpha = 1;
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = mastery >= 4 ? 2.1 : 1.5;
+    ctx.strokeStyle = mastery >= 4 ? '#fff6cc' : '#ffffff';
     ctx.beginPath();
-    ctx.moveTo(b.x - ux * tail * 0.65, b.y - uy * tail * 0.65);
+    ctx.moveTo(b.x - ux * tail * 0.68, b.y - uy * tail * 0.68);
     ctx.lineTo(b.x, b.y);
     ctx.stroke();
   }
@@ -2233,9 +2561,36 @@ function drawDynamicLights() {
       if (!bar.alive || bar.burnT <= 0) continue;
       if (bar.x < v.l || bar.x > v.r || bar.y < v.t || bar.y > v.b) continue;
       ctx.globalAlpha = 0.35;
-      const sp = getLightSprite('#ff7a3d');
+      const sp = getLightSprite(bar.kind === 'cryo' ? '#5ee7ff' : '#ff7a3d');
       ctx.drawImage(sp, bar.x - 80, bar.y - 80, 160, 160);
     }
+    for (let i = 0; i < shieldPylons.length; i++) {
+      const py = shieldPylons[i];
+      if (py.cooldown > 0) continue;
+      if (py.x < v.l || py.x > v.r || py.y < v.t || py.y > v.b) continue;
+      ctx.globalAlpha = 0.2 + 0.06 * Math.sin(game.time * 3 + py.pulse);
+      const sp = getLightSprite('#46e5ff');
+      ctx.drawImage(sp, py.x - 105, py.y - 105, 210, 210);
+    }
+  }
+  // Thermite firelight & Shield Dome soft energy halos
+  for (let i = 0; i < hazards.length; i++) {
+    const hz = hazards[i];
+    if (!!hz.inSafeZone !== inSafe) continue;
+    if (hz.x < v.l || hz.x > v.r || hz.y < v.t || hz.y > v.b) continue;
+    const rad = hz.r * 1.35;
+    ctx.globalAlpha = 0.3 + 0.08 * Math.sin(game.time * 15 + hz.seed);
+    const sp = getLightSprite('#ff6d2e');
+    ctx.drawImage(sp, hz.x - rad, hz.y - rad, rad * 2, rad * 2);
+  }
+  for (let i = 0; i < domes.length; i++) {
+    const dm = domes[i];
+    if (!!dm.inSafeZone !== inSafe) continue;
+    if (dm.x < v.l || dm.x > v.r || dm.y < v.t || dm.y > v.b) continue;
+    const rad = dm.r * 1.25;
+    ctx.globalAlpha = 0.22;
+    const sp = getLightSprite('#46e5ff');
+    ctx.drawImage(sp, dm.x - rad, dm.y - rad, rad * 2, rad * 2);
   }
   // Flying Bazooka rocket thruster halos
   for (let i = 0; i < bullets.length; i++) {
@@ -2486,6 +2841,76 @@ function findLockTarget() {
   return best;
 }
 
+function drawReticleShape(c, x, y, style, color, spread, scale = 1) {
+  c.save();
+  c.strokeStyle = color;
+  c.fillStyle = color;
+  c.lineWidth = 1.5 * Math.max(0.85, Math.min(1.35, scale));
+  if (style === 'dot') {
+    c.beginPath();
+    c.arc(x, y, 3.0 * scale, 0, TAU);
+    c.fill();
+    c.globalAlpha = 0.45;
+    c.lineWidth = 1.2;
+    c.beginPath();
+    c.arc(x, y, Math.max(7, spread * 0.7), 0, TAU);
+    c.stroke();
+  } else if (style === 'circle') {
+    c.beginPath();
+    c.arc(x, y, 1.8 * scale, 0, TAU);
+    c.fill();
+    c.beginPath();
+    c.arc(x, y, Math.max(7, spread), 0, TAU);
+    c.stroke();
+  } else if (style === 'tactical') {
+    c.beginPath();
+    c.arc(x, y, 1.5 * scale, 0, TAU);
+    c.fill();
+    const arm = 5.5 * scale;
+    c.beginPath();
+    // Bottom & left/right T-bars + top chevron
+    c.moveTo(x - spread, y); c.lineTo(x - spread - arm, y);
+    c.moveTo(x + spread, y); c.lineTo(x + spread + arm, y);
+    c.moveTo(x, y + spread); c.lineTo(x, y + spread + arm);
+    c.moveTo(x - 4 * scale, y - spread - 2 * scale);
+    c.lineTo(x, y - spread - 6 * scale);
+    c.lineTo(x + 4 * scale, y - spread - 2 * scale);
+    c.stroke();
+  } else {
+    c.beginPath();
+    c.arc(x, y, 1.6 * scale, 0, TAU);
+    c.fill();
+    const arm = 5.5 * scale;
+    c.beginPath();
+    for (let i = 0; i < 4; i++) {
+      const a = (Math.PI / 2) * i;
+      const cx = Math.cos(a);
+      const cy = Math.sin(a);
+      c.moveTo(x + cx * spread, y + cy * spread);
+      c.lineTo(x + cx * (spread + arm), y + cy * (spread + arm));
+    }
+    c.stroke();
+  }
+  c.restore();
+}
+
+function drawCrosshairPreview() {
+  const el = document.getElementById('crosshairPreview');
+  if (!el) return;
+  const c = el.getContext('2d');
+  const ch = userPrefs.crosshair || { style: 'cross', color: '#ffffff', size: 1.0 };
+  c.clearRect(0, 0, el.width, el.height);
+  c.fillStyle = '#07111a';
+  c.fillRect(0, 0, el.width, el.height);
+  c.strokeStyle = 'rgba(94,231,255,0.1)';
+  c.lineWidth = 1;
+  c.beginPath();
+  c.moveTo(el.width / 2, 0); c.lineTo(el.width / 2, el.height);
+  c.moveTo(0, el.height / 2); c.lineTo(el.width, el.height / 2);
+  c.stroke();
+  drawReticleShape(c, el.width / 2, el.height / 2, ch.style, ch.color, 10 * ch.size, ch.size);
+}
+
 let _crosshairSpread = 10;
 let _lockAnim = 0;
 let _lastLockId = 0;
@@ -2513,23 +2938,17 @@ function drawCrosshair() {
     8, 24
   );
   _crosshairSpread = damp(_crosshairSpread, targetSpread, 18, dt);
-  const spread = _crosshairSpread;
+  const ch = (typeof userPrefs !== 'undefined' && userPrefs.crosshair)
+    ? userPrefs.crosshair
+    : { style: 'cross', color: '#ffffff', size: 1.0 };
+  const chScale = ch.size || 1.0;
+  const spread = _crosshairSpread * chScale;
 
   ctx.save();
-  ctx.strokeStyle = player.jamT > 0 ? '#5ee7ff'
-    : curWeapon.explosive ? 'rgba(255,155,102,0.92)'
-    : 'rgba(255,255,255,0.88)';
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.arc(x, y, 1.6, 0, TAU);
-  for (let i = 0; i < 4; i++) {
-    const a = (Math.PI / 2) * i;
-    const cx = Math.cos(a);
-    const cy = Math.sin(a);
-    ctx.moveTo(x + cx * spread, y + cy * spread);
-    ctx.lineTo(x + cx * (spread + 5.5), y + cy * (spread + 5.5));
-  }
-  ctx.stroke();
+  const baseCol = player.jamT > 0 ? '#5ee7ff'
+    : curWeapon.explosive ? '#ff9b66'
+    : (ch.color || '#ffffff');
+  drawReticleShape(ctx, x, y, ch.style, baseCol, spread, chScale);
 
   // Bazooka blast-bracket reticle ring
   if (curWeapon.explosive && !player.reloading) {
@@ -2811,7 +3230,7 @@ function drawSafeZoneMap() {
 
   ctx.font = '800 9px "Segoe UI", system-ui, sans-serif';
   ctx.fillStyle = 'rgba(94,231,255,0.48)';
-  ctx.fillText('ALL 12 WEAPONS · TIER 1 → TIER 5', 84, 134);
+  ctx.fillText('ALL 14 WEAPONS · TIER 1 → TIER 5', 84, 134);
   ctx.fillText('TACTICAL GADGETS & WEAPON FINISH FORGE', 84, 405);
   ctx.fillStyle = 'rgba(255,179,71,0.56)';
   ctx.fillText('DEPLOYMENT DECK', 84, 534);
@@ -3144,8 +3563,10 @@ function render() {
   if (inSafeMap) {
     drawSafeZoneMap();
     drawDecals();
+    drawHazards();
     drawAimLine();
     drawEntities();
+    drawDomes();
     drawBullets();
     drawBeams();
     drawProjectiles();
@@ -3156,11 +3577,15 @@ function render() {
   } else {
     drawGround();
     drawDecals();
+    drawStealthZones();
     drawBoostPads();
+    drawShieldPylons();
+    drawHazards();
     drawPickups();
     drawObstaclesAndBarrels();
     drawAimLine();
     drawEntities();
+    drawDomes();
     drawDamageIndicator();
     drawBullets();
     drawBeams();
@@ -3233,25 +3658,34 @@ function updateHUD() {
     }
   }
 
-  let buff = 'COMBAT READY';
+  let buff = typeof t === 'function' ? t('buffReady') : 'COMBAT READY';
   let buffTone = '';
   if (player.inSafeZone) {
-    buff = 'SAFE ZONE · INVULNERABLE';
+    buff = typeof t === 'function' ? t('buffSafe') : 'SAFE ZONE · INVULNERABLE';
     buffTone = 'cyan';
   } else if (player.jamT > 0) {
-    buff = 'EMP JAMMED';
+    buff = typeof t === 'function' ? t('buffEmp') : 'EMP JAMMED';
     buffTone = 'purple';
+  } else if (player.pylonLink) {
+    buff = typeof t === 'function' ? t('buffPylon') : 'PYLON · RECHARGING ARMOR';
+    buffTone = 'cyan';
+  } else if (player.stealth) {
+    buff = typeof t === 'function' ? t('buffStealth') : 'STEALTH · CLOAKED';
+    buffTone = 'green';
+  } else if (player.slowT > 0) {
+    buff = typeof t === 'function' ? t('buffChilled') : 'CRYO CHILLED';
+    buffTone = 'cyan';
   } else if (game.invuln > 0) {
-    buff = 'DASH · EVADE';
+    buff = typeof t === 'function' ? t('buffDash') : 'DASH · EVADE';
     buffTone = 'cyan';
   } else if (game.killBoostT > 0) {
     buff = 'STREAK +' + Math.round(((game.killBoost || 1) - 1) * 100) + '% DMG';
     buffTone = 'gold';
   } else if (player.speedBoostT > 0) {
-    buff = 'SPEED BOOST';
+    buff = typeof t === 'function' ? t('buffSpeed') : 'SPEED BOOST';
     buffTone = 'cyan';
   } else if (player.hp < player.maxHp * (player.regenCap || 0.7) && game.regenDelay <= 0) {
-    buff = 'REGENERATING';
+    buff = typeof t === 'function' ? t('buffRegen') : 'REGENERATING';
     buffTone = 'green';
   } else if (player.weapon === 'minigun' && !player.reloading) {
     if ((player.heat || 0) > 0.62) {
@@ -3435,7 +3869,9 @@ function updateHUD() {
 
   if (player.weapon !== hudCache.weapon) {
     hudCache.weapon = player.weapon;
-    UI.weapon.textContent = WEAPONS[player.weapon].name;
+    const mTier = typeof getWeaponMasteryTier === 'function' ? getWeaponMasteryTier(player.weapon) : 0;
+    const mBadge = mTier >= 4 ? ' ★' : mTier >= 3 ? ' ✦' : '';
+    UI.weapon.textContent = WEAPONS[player.weapon].name + mBadge;
     drawWeaponPreview();
   }
   if (player.skin !== hudCache.skin) {
@@ -3477,9 +3913,12 @@ function updateHUD() {
   }
 
   const maxDash = DASH_COOLDOWN * (player.dashCdMul || 1);
+  const dashKeyLbl = typeof formatKeyCode === 'function' && typeof getKeybind === 'function'
+    ? formatKeyCode(getKeybind('dash')) : 'SPACE';
+  const dashReadyLbl = typeof t === 'function' ? t('dashReady') : 'DASH READY';
   const dashText = player.dashCd > 0
     ? 'DASH ' + (Math.ceil(player.dashCd * 10) / 10).toFixed(1) + 's'
-    : player.dashT > 0 ? 'DASHING' : 'SPACE · DASH READY';
+    : player.dashT > 0 ? 'DASHING' : (dashKeyLbl + ' · ' + dashReadyLbl);
   if (dashText !== hudCache.dash) {
     hudCache.dash = dashText;
     UI.dashLabel.textContent = dashText;
@@ -3696,6 +4135,45 @@ function drawMinimap() {
   const mapX = (x) => pad + x * k;
   const mapY = (y) => pad + y * k;
 
+  // Stealth Brushes on radar
+  mctx.fillStyle = 'rgba(70,210,150,0.18)';
+  for (let i = 0; i < stealthZones.length; i++) {
+    const sz = stealthZones[i];
+    mctx.beginPath();
+    mctx.arc(mapX(sz.x), mapY(sz.y), Math.max(2, sz.r * k), 0, TAU);
+    mctx.fill();
+  }
+  // Shield Pylons on radar
+  for (let i = 0; i < shieldPylons.length; i++) {
+    const py = shieldPylons[i];
+    const px = mapX(py.x);
+    const py2 = mapY(py.y);
+    mctx.fillStyle = py.cooldown <= 0 ? '#5ee7ff' : 'rgba(120,160,175,0.45)';
+    mctx.beginPath();
+    mctx.moveTo(px, py2 - 2.8); mctx.lineTo(px + 2.8, py2);
+    mctx.lineTo(px, py2 + 2.8); mctx.lineTo(px - 2.8, py2);
+    mctx.closePath();
+    mctx.fill();
+  }
+  // Live Thermite fire zones & Shield Domes on radar
+  for (let i = 0; i < hazards.length; i++) {
+    const hz = hazards[i];
+    if (hz.inSafeZone) continue;
+    mctx.strokeStyle = 'rgba(255,109,46,0.85)';
+    mctx.lineWidth = 1.2;
+    mctx.beginPath();
+    mctx.arc(mapX(hz.x), mapY(hz.y), Math.max(2, hz.r * k), 0, TAU);
+    mctx.stroke();
+  }
+  for (let i = 0; i < domes.length; i++) {
+    const dm = domes[i];
+    if (dm.inSafeZone) continue;
+    mctx.strokeStyle = 'rgba(70,229,255,0.9)';
+    mctx.lineWidth = 1.2;
+    mctx.beginPath();
+    mctx.arc(mapX(dm.x), mapY(dm.y), Math.max(2, dm.r * k), 0, TAU);
+    mctx.stroke();
+  }
   // Live intact destructible crates on radar (vanish cleanly when shattered)
   mctx.fillStyle = 'rgba(196,154,96,0.22)';
   for (let i = 0; i < obstacles.length; i++) {

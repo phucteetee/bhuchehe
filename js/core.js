@@ -55,9 +55,10 @@ const WEAPONS = {
   smg: {
     name: 'SMG', short: 'S', tier: 2, model: 'smg',
     dmg: 10, rpm: 860, mag: 34, reload: 1.4,
-    spread: 0.052, speed: 1650, pellets: 1, range: 720, pref: 220,
-    color: '#5ee7ff', tracer: '#b7f7ff', kick: 0.85, len: 30, thick: 8, sound: 'smg',
-    critBonus: 0.04,
+    spread: 0.024, bloomMul: 0.22, bloomMax: 0.026, moveSpreadMul: 1.22,
+    speed: 1820, pellets: 1, range: 820, pref: 245,
+    color: '#5ee7ff', tracer: '#b7f7ff', kick: 0.8, len: 30, thick: 8, sound: 'smg',
+    critBonus: 0.05,
   },
   shotgun: {
     name: 'SHOTGUN', short: 'G', tier: 2, model: 'shotgun',
@@ -100,6 +101,21 @@ const WEAPONS = {
     spread: 0.078, speed: 1850, pellets: 1, range: 1020, pref: 380,
     color: '#c7f464', tracer: '#eaffb0', kick: 2.2, len: 48, thick: 14, sound: 'lmg',
     critBonus: 0.04, moveMul: 0.95,
+  },
+  ricochet: {
+    name: 'RICOCHET', short: 'RC', tier: 4, model: 'ricochet',
+    dmg: 38, rpm: 195, mag: 14, reload: 1.75,
+    spread: 0.01, speed: 2050, pellets: 1, range: 1680, pref: 470,
+    color: '#2ef2ff', tracer: '#b5fbff', kick: 2.9, len: 44, thick: 11, sound: 'ricochet',
+    critBonus: 0.14, bounces: 2, bounceBonus: 0.15, disc: true,
+  },
+  cryo: {
+    name: 'CRYO BEAM', short: 'CR', tier: 4, model: 'cryo',
+    dmg: 11.5, rpm: 760, mag: 44, reload: 2.1,
+    spread: 0.042, bloomMul: 0.18, bloomMax: 0.028, moveSpreadMul: 1.15,
+    speed: 1220, pellets: 1, range: 470, pref: 210,
+    color: '#76e8ff', tracer: '#daf9ff', kick: 0.65, len: 42, thick: 14, sound: 'cryo',
+    critBonus: 0.03, chill: 0.78, cryo: true, crateDmgMul: 1.15, moveMul: 0.96,
   },
   sniper: {
     name: 'SNIPER', short: 'SR', tier: 4, model: 'sniper',
@@ -148,6 +164,14 @@ const GADGETS = {
     id: 'smoke', name: 'SMOKE', short: 'SMK', color: '#9fb8c2', light: '#dcecf2',
     fuse: 0.45, radius: 142, duration: 7.5, throwDist: 410, maxCharges: 3,
   },
+  thermite: {
+    id: 'thermite', name: 'THERMITE', short: 'THM', color: '#ff5d2a', light: '#ffc285',
+    fuse: 0.62, radius: 122, duration: 4.5, dps: 34, crateMul: 2.35, throwDist: 420, maxCharges: 3,
+  },
+  shield: {
+    id: 'shield', name: 'DOME', short: 'SHD', color: '#46e5ff', light: '#cdf9ff',
+    fuse: 0.42, radius: 112, duration: 5.5, hp: 260, throwDist: 380, maxCharges: 2,
+  },
 };
 
 const GAME_MODES = {
@@ -188,12 +212,27 @@ const PERKS = {
 
 const hasOwn = (obj, key) => !!obj && typeof key === 'string' && Object.prototype.hasOwnProperty.call(obj, key);
 
+const DEFAULT_KEYBINDS = {
+  reload: 'KeyR',
+  dash: 'Space',
+  swap: 'KeyQ',
+  interact: 'KeyE',
+  gadget: 'KeyG',
+  mute: 'KeyM',
+};
+const CROSSHAIR_STYLES = ['cross', 'dot', 'circle', 'tactical'];
+const CROSSHAIR_COLORS = ['#ffffff', '#5ee7ff', '#6ff2b0', '#ffd166', '#ff5a5f', '#ff5cf4'];
+let rebindingAction = null;
+
 const PREFS_KEY = 'battleground.prefs.v1';
 const userPrefs = {
   mode: 'classic',
   perk: 'vanguard',
   autoAdapt: true,
   showFps: false,
+  lang: 'en',
+  crosshair: { style: 'cross', color: '#ffffff', size: 1.0 },
+  keybinds: { ...DEFAULT_KEYBINDS },
 };
 try {
   const savedPrefs = JSON.parse(localStorage.getItem(PREFS_KEY) || 'null');
@@ -202,11 +241,209 @@ try {
     if (hasOwn(PERKS, savedPrefs.perk)) userPrefs.perk = savedPrefs.perk;
     if (typeof savedPrefs.autoAdapt === 'boolean') userPrefs.autoAdapt = savedPrefs.autoAdapt;
     if (typeof savedPrefs.showFps === 'boolean') userPrefs.showFps = savedPrefs.showFps;
+    if (savedPrefs.lang === 'en' || savedPrefs.lang === 'vi') userPrefs.lang = savedPrefs.lang;
+    if (savedPrefs.crosshair && typeof savedPrefs.crosshair === 'object') {
+      if (CROSSHAIR_STYLES.includes(savedPrefs.crosshair.style)) userPrefs.crosshair.style = savedPrefs.crosshair.style;
+      if (typeof savedPrefs.crosshair.color === 'string' && /^#[0-9a-f]{6}$/i.test(savedPrefs.crosshair.color)) {
+        userPrefs.crosshair.color = savedPrefs.crosshair.color;
+      }
+      const sz = Number(savedPrefs.crosshair.size);
+      if (Number.isFinite(sz)) userPrefs.crosshair.size = clamp(sz, 0.7, 1.6);
+    }
+    if (savedPrefs.keybinds && typeof savedPrefs.keybinds === 'object') {
+      for (const act in DEFAULT_KEYBINDS) {
+        const code = savedPrefs.keybinds[act];
+        if (typeof code === 'string' && code.length >= 2 && code.length <= 20) {
+          userPrefs.keybinds[act] = code;
+        }
+      }
+    }
   }
 } catch (e) { /* storage unavailable */ }
 
 function saveUserPrefs() {
   try { localStorage.setItem(PREFS_KEY, JSON.stringify(userPrefs)); } catch (e) {}
+}
+
+function getKeybind(action) {
+  return (userPrefs.keybinds && userPrefs.keybinds[action]) || DEFAULT_KEYBINDS[action] || '';
+}
+
+function formatKeyCode(code) {
+  if (!code) return '?';
+  if (code === 'Space') return 'SPACE';
+  if (code.startsWith('Key')) return code.slice(3);
+  if (code.startsWith('Digit')) return code.slice(5);
+  if (code.startsWith('Numpad')) return 'N' + code.slice(6);
+  if (code === 'ShiftLeft' || code === 'ShiftRight') return 'SHIFT';
+  if (code === 'ControlLeft' || code === 'ControlRight') return 'CTRL';
+  if (code === 'AltLeft' || code === 'AltRight') return 'ALT';
+  if (code === 'Tab') return 'TAB';
+  return code.toUpperCase().slice(0, 6);
+}
+
+const I18N = {
+  en: {
+    navPlay: 'PLAY', navArmory: 'ARMORY', navCareer: 'CAREER', navSettings: 'SETTINGS',
+    equippedOp: 'EQUIPPED OPERATOR', customizeArmory: 'CUSTOMIZE IN ARMORY →',
+    tacticalKit: 'TACTICAL KIT', freePerk: 'FREE LOADOUT PERK',
+    dailyContracts: 'DAILY CONTRACTS', resetMidnight: 'RESET 00:00',
+    combatControls: 'COMBAT CONTROLS', alwaysSprint: 'ALWAYS SPRINT',
+    selectMode: 'SELECT MODE', dropIn: 'DROP IN', pressEnter: 'PRESS ENTER TO LAUNCH',
+    tagline: '30-operator expanded arena. 14 weapons including Ricochet & Cryo Beam, 5 gadgets, Cryo barrels, Shield Pylons & Stealth Brushes.',
+    lifetimeAura: 'LIFETIME AURA', trail: 'TRAIL',
+    settingsTitle: 'SETTINGS', systemConfig: 'SYSTEM CONFIGURATION', close: 'CLOSE',
+    graphicsHead: 'GRAPHICS & PERFORMANCE', multiDevice: 'MULTI-DEVICE ENGINE',
+    graphicsHint: 'Potato & Low disable blur, decals and heavy shaders for 60 FPS on weak devices. High & Ultra enable dynamic lighting halos, hex shields and storm lightning.',
+    audioHead: 'AUDIO MIXER', synthAudio: 'SYNTHESIZED WEB AUDIO',
+    langHead: 'LANGUAGE / NGÔN NGỮ', langSub: 'INTERFACE LOCALIZATION',
+    crosshairHead: 'CROSSHAIR CUSTOMIZER', crosshairSub: 'LIVE RETICLE PREVIEW',
+    crossStyle: 'STYLE', crossColor: 'COLOR', crossSize: 'SIZE',
+    keybindsHead: 'CUSTOM KEYBINDS', keybindsSub: 'CLICK TO REBIND · ESC CANCEL',
+    resetKeys: 'RESET DEFAULTS', pressKey: 'PRESS KEY...',
+    kbReload: 'Reload', kbDash: 'Dash', kbSwap: 'Switch Gun', kbInteract: 'Loot / Interact', kbGadget: 'Throw Gadget', kbMute: 'Mute Audio',
+    armoryEyebrow: 'OPERATOR ARMORY', armoryTitle: 'ROSTER & FINISHERS', backLobby: 'BACK TO LOBBY',
+    armoryIntro: '8 PLANET OPERATORS · 5 TRAILS · 6 FINISHER VFX (BUY WITH AURA) · COSMETIC ONLY',
+    careerEyebrow: 'SERVICE RECORD', careerTitle: 'CAREER', weaponMastery: 'WEAPON MASTERY (25+ GLOW · 50+ APEX TRACER)',
+    matchPaused: 'MATCH PAUSED', holdPosition: 'HOLD POSITION', resume: 'RESUME',
+    returnSafe: 'RETURN TO SAFE ZONE', quitLobby: 'QUIT TO LOBBY',
+    playAgain: 'PLAY AGAIN', pressRedeploy: 'PRESS ENTER TO REDEPLOY',
+    modeClassicDesc: '30 operators · 4400m expanded map, 14 weapons, 5 gadgets, Cryo barrels & Shield Pylons',
+    modePracticeDesc: '20 ops · Dedicated Safe Zone map, all 14 weapons & 5 gadgets free, no storm',
+    perkVanguardDesc: 'Start with +30 Armor & 90 Max Armor',
+    perkStrikerDesc: '-22% Reload time, -25% Dash CD & +8% Crit',
+    perkScoutDesc: '+10% Move speed & +35% Minimap radar range',
+    perkMedicDesc: 'Faster Regen up to 85% HP & +55 HP Medkits',
+    ctrlMove: 'Move', ctrlFire: 'Fire / Gadget', ctrlSwitch: 'Switch Gun', ctrlSwap: 'Loot / Reload', ctrlDash: 'Dash · i-frames', ctrlSafe: 'Safe · TP · Guns',
+    dashReady: 'DASH READY',
+    buffReady: 'COMBAT READY', buffSafe: 'SAFE ZONE · INVULNERABLE', buffStealth: 'STEALTH · CLOAKED',
+    buffPylon: 'PYLON · RECHARGING ARMOR', buffEmp: 'EMP JAMMED', buffChilled: 'CRYO CHILLED',
+    buffDash: 'DASH · EVADE', buffSpeed: 'SPEED BOOST', buffRegen: 'REGENERATING',
+    secOperators: 'OPERATORS', secTrails: 'TRAILS', secFinishers: 'FINISHER VFX (BUY WITH AURA)',
+    equipped: 'EQUIPPED', equip: 'EQUIP',
+  },
+  vi: {
+    navPlay: 'CHƠI', navArmory: 'KHO ĐỒ', navCareer: 'SỰ NGHIỆP', navSettings: 'CÀI ĐẶT',
+    equippedOp: 'ĐẶC VỤ ĐANG DÙNG', customizeArmory: 'TÙY CHỈNH KHO ĐỒ →',
+    tacticalKit: 'BỘ KỸ NĂNG', freePerk: 'NỘI TẠI MIỄN PHÍ',
+    dailyContracts: 'NHIỆM VỤ NGÀY', resetMidnight: 'LÀM MỚI 00:00',
+    combatControls: 'PHÍM ĐIỀU KHIỂN', alwaysSprint: 'TỰ ĐỘNG CHẠY NHANH',
+    selectMode: 'CHỌN CHẾ ĐỘ', dropIn: 'XUẤT KÍCH', pressEnter: 'NHẤN ENTER ĐỂ BẮT ĐẦU',
+    tagline: 'Đấu trường 30 đặc vụ. 14 vũ khí gồm Súng Nảy Tường & Phun Băng, 5 trang bị, thùng Cryo, Trạm Nạp Giáp & Bụi Tàng Hình.',
+    lifetimeAura: 'TỔNG AURA', trail: 'VỆT CHẠY',
+    settingsTitle: 'CÀI ĐẶT', systemConfig: 'CẤU HÌNH HỆ THỐNG', close: 'ĐÓNG',
+    graphicsHead: 'ĐỒ HỌA & HIỆU NĂNG', multiDevice: 'TỐI ƯU ĐA THIẾT BỊ',
+    graphicsHint: 'Mức Potato & Low tắt hiệu ứng mờ/vết đạn để đạt 60 FPS trên máy yếu. High & Ultra bật ánh sáng động, lưới khiên và sét bão.',
+    audioHead: 'ÂM THANH', synthAudio: 'ÂM THANH TỔNG HỢP WEB AUDIO',
+    langHead: 'NGÔN NGỮ / LANGUAGE', langSub: 'GIAO DIỆN HIỂN THỊ',
+    crosshairHead: 'TÙY BIẾN TÂM NGẮM', crosshairSub: 'XEM TRƯỚC TRỰC TIẾP',
+    crossStyle: 'KIỂU TÂM', crossColor: 'MÀU SẮC', crossSize: 'KÍCH THƯỚC',
+    keybindsHead: 'ĐỔI PHÍM TẮT', keybindsSub: 'BẤM ĐỂ ĐỔI · ESC ĐỂ HỦY',
+    resetKeys: 'MẶC ĐỊNH', pressKey: 'NHẤN PHÍM...',
+    kbReload: 'Nạp đạn', kbDash: 'Lướt (Dash)', kbSwap: 'Đổi súng', kbInteract: 'Nhặt / Tương tác', kbGadget: 'Ném trang bị', kbMute: 'Tắt / Bật tiếng',
+    armoryEyebrow: 'KHO ĐỒ ĐẶC VỤ', armoryTitle: 'ĐẶC VỤ & KẾT LIỄU', backLobby: 'VỀ SẢNH',
+    armoryIntro: '8 HÀNH TINH · 5 VỆT CHẠY · 6 HIỆU ỨNG KẾT LIỄU (MUA BẰNG AURA) · CHỈ TRANG TRÍ',
+    careerEyebrow: 'HỒ SƠ CHIẾN ĐẤU', careerTitle: 'SỰ NGHIỆP', weaponMastery: 'THÔNG THẠO VŨ KHÍ (25+ ĐẠN SÁNG · 50+ ĐẠN APEX)',
+    matchPaused: 'TẠM DỪNG', holdPosition: 'GIỮ VỊ TRÍ', resume: 'TIẾP TỤC',
+    returnSafe: 'VỀ KHU AN TOÀN', quitLobby: 'THOÁT RA SẢNH',
+    playAgain: 'CHƠI LẠI', pressRedeploy: 'NHẤN ENTER ĐỂ CHƠI LẠI',
+    modeClassicDesc: '30 đặc vụ · Bản đồ 4400m, 14 vũ khí, 5 trang bị, thùng Cryo & Trạm Nạp Giáp',
+    modePracticeDesc: '20 đặc vụ · Bản đồ Khu An Toàn riêng, thử miễn phí 14 súng & 5 trang bị, không bo',
+    perkVanguardDesc: 'Khởi đầu +30 Giáp & tối đa 90 Giáp',
+    perkStrikerDesc: '-22% thời gian nạp đạn, -25% hồi Dash & +8% Chí mạng',
+    perkScoutDesc: '+10% tốc độ di chuyển & +35% tầm quét Radar',
+    perkMedicDesc: 'Hồi máu nhanh lên 85% HP & hồi +55 HP từ túi cứu thương',
+    ctrlMove: 'Di chuyển', ctrlFire: 'Bắn / Trang bị', ctrlSwitch: 'Đổi súng', ctrlSwap: 'Nhặt / Nạp đạn', ctrlDash: 'Lướt né đạn', ctrlSafe: 'An toàn · TP · Súng',
+    dashReady: 'SẴN SÀNG LƯỚT',
+    buffReady: 'SẴN SÀNG CHIẾN ĐẤU', buffSafe: 'KHU AN TOÀN · BẤT TỬ', buffStealth: 'TÀNG HÌNH · ẨN THÂN',
+    buffPylon: 'TRẠM GIÁP · ĐANG NẠP', buffEmp: 'BỊ KHÓA SÚNG EMP', buffChilled: 'BỊ LÀM CHẬM BĂNG',
+    buffDash: 'LƯỚT · MIỄN SÁT THƯƠNG', buffSpeed: 'TĂNG TỐC ĐỘ', buffRegen: 'ĐANG HỒI MÁU',
+    secOperators: 'ĐẶC VỤ HÀNH TINH', secTrails: 'VỆT DI CHUYỂN', secFinishers: 'HIỆU ỨNG KẾT LIỄU (MUA BẰNG AURA)',
+    equipped: 'ĐANG DÙNG', equip: 'TRANG BỊ',
+  },
+};
+
+function t(key) {
+  const dict = I18N[userPrefs.lang] || I18N.en;
+  return hasOwn(dict, key) ? dict[key] : (I18N.en[key] || key);
+}
+
+function updateKeybindUI() {
+  for (const btn of document.querySelectorAll('[data-keybind]')) {
+    const act = btn.dataset.keybind;
+    const listening = rebindingAction === act;
+    btn.classList.toggle('listening', listening);
+    btn.textContent = listening ? t('pressKey') : formatKeyCode(getKeybind(act));
+  }
+  const pk = document.getElementById('pickupKey');
+  if (pk) pk.textContent = formatKeyCode(getKeybind('interact'));
+  const gk = document.querySelector('#gadgetSlot .slotKey');
+  if (gk) gk.textContent = formatKeyCode(getKeybind('gadget'));
+  const kSwap = document.getElementById('ctrlKeySwap');
+  if (kSwap) kSwap.textContent = '1 2 / ' + formatKeyCode(getKeybind('swap'));
+  const kLoot = document.getElementById('ctrlKeyLoot');
+  if (kLoot) kLoot.textContent = formatKeyCode(getKeybind('interact')) + ' / ' + formatKeyCode(getKeybind('reload'));
+  const kDash = document.getElementById('ctrlKeyDash');
+  if (kDash) kDash.textContent = formatKeyCode(getKeybind('dash'));
+  const pSwap = document.getElementById('pauseKeySwap');
+  if (pSwap) pSwap.textContent = '1 2 / ' + formatKeyCode(getKeybind('swap'));
+  const pGad = document.getElementById('pauseKeyGadget');
+  if (pGad) pGad.textContent = 'RMB / ' + formatKeyCode(getKeybind('gadget'));
+  const pLoot = document.getElementById('pauseKeyLoot');
+  if (pLoot) pLoot.textContent = formatKeyCode(getKeybind('interact')) + ' / ' + formatKeyCode(getKeybind('reload'));
+  const aHint = document.getElementById('audioMuteHint');
+  if (aHint) {
+    const mk = formatKeyCode(getKeybind('mute'));
+    aHint.innerHTML = userPrefs.lang === 'vi'
+      ? `Nhấn <kbd>${mk}</kbd> bất cứ lúc nào để tắt hoặc bật âm thanh.`
+      : `Press <kbd>${mk}</kbd> at any time to mute or unmute master audio.`;
+  }
+}
+
+function updateCrosshairUI() {
+  const ch = userPrefs.crosshair;
+  for (const btn of document.querySelectorAll('[data-crosshair-style]')) {
+    const sel = btn.dataset.crosshairStyle === ch.style;
+    btn.classList.toggle('selected', sel);
+    btn.setAttribute('aria-pressed', String(sel));
+  }
+  for (const btn of document.querySelectorAll('[data-crosshair-color]')) {
+    const sel = btn.dataset.crosshairColor.toLowerCase() === ch.color.toLowerCase();
+    btn.classList.toggle('selected', sel);
+    btn.setAttribute('aria-pressed', String(sel));
+  }
+  const slider = document.querySelector('[data-crosshair-size]');
+  if (slider) slider.value = String(Math.round(ch.size * 100));
+  const sizeVal = document.getElementById('crosshairSizeVal');
+  if (sizeVal) sizeVal.textContent = Math.round(ch.size * 100) + '%';
+  if (typeof drawCrosshairPreview === 'function') drawCrosshairPreview();
+}
+
+function applyLanguageUI() {
+  document.documentElement.lang = userPrefs.lang;
+  for (const el of document.querySelectorAll('[data-i18n]')) {
+    const key = el.dataset.i18n;
+    if (key) el.textContent = t(key);
+  }
+  for (const btn of document.querySelectorAll('[data-lang]')) {
+    const sel = btn.dataset.lang === userPrefs.lang;
+    btn.classList.toggle('selected', sel);
+    btn.setAttribute('aria-pressed', String(sel));
+  }
+  const quickLang = document.getElementById('quickLangBtn');
+  if (quickLang) quickLang.textContent = userPrefs.lang.toUpperCase();
+  updateDeployDeckUI();
+  updateKeybindUI();
+  if (typeof renderArmory === 'function' && typeof isArmoryOpen === 'function' && isArmoryOpen()) renderArmory();
+  if (typeof renderCareer === 'function' && typeof isCareerOpen === 'function' && isCareerOpen()) renderCareer();
+}
+
+function setLanguage(lang) {
+  if (lang !== 'en' && lang !== 'vi') return;
+  userPrefs.lang = lang;
+  saveUserPrefs();
+  applyLanguageUI();
+  if (typeof resetHUDCache === 'function') resetHUDCache();
 }
 
 function getGameMode() {
@@ -240,8 +477,11 @@ function updateDeployDeckUI() {
   }
   const mDesc = document.getElementById('modeDesc');
   const pDesc = document.getElementById('perkDesc');
-  if (mDesc) mDesc.textContent = m.desc;
-  if (pDesc) pDesc.textContent = p.desc;
+  if (mDesc) mDesc.textContent = m.id === 'practice' ? t('modePracticeDesc') : t('modeClassicDesc');
+  if (pDesc) {
+    const pMap = { vanguard: 'perkVanguardDesc', striker: 'perkStrikerDesc', scout: 'perkScoutDesc', medic: 'perkMedicDesc' };
+    pDesc.textContent = t(pMap[p.id] || 'perkVanguardDesc');
+  }
 }
 
 function updateFpsToggleUI() {
@@ -667,6 +907,10 @@ let pickups = [];
 let bullets = [];
 let projectiles = [];
 let smokes = [];
+let hazards = [];
+let domes = [];
+let shieldPylons = [];
+let stealthZones = [];
 let particles = [];
 let decals = [];
 let beams = [];
@@ -877,6 +1121,8 @@ const SFX_GAP = {
   pistol: 45, smg: 46, shotgun: 70, revolver: 60, rifle: 55,
   pulse: 42, dmr: 55, lmg: 48, sniper: 80, railgun: 95,
   minigun: 42, minigunSpin: 140, bazooka: 120,
+  ricochet: 58, bounceShot: 42, cryo: 46, thermite: 140,
+  shield: 140, shieldHit: 48, shieldBreak: 150, pylon: 240,
   hit: 36, crit: 52, hurt: 140, kill: 110, streak: 200, aura: 120,
   ui: 40, armor: 120, explosion: 85, emp: 120, smoke: 120,
   bounce: 65, boost: 180, crateBreak: 70, swap: 75, throw: 90,
@@ -1356,6 +1602,38 @@ function sfx(name, x, y, param = 0) {
       noiseBurst(0.14, 0.44 * v, 1250, 0, null, pan, { endCutoff: 340, reverb: 0.32 });
       noiseBurst(0.36, 0.26 * v, 2800, 0.035, null, pan, { filterType: 'bandpass', q: 0.9, endCutoff: 620, attack: 0.025, reverb: 0.28 });
       break;
+    case 'ricochet':
+      tone(980 * jit, 0.085, 'triangle', 0.13 * v, -420, 0, null, pan, { reverb: 0.24 });
+      tone(1740 * jit, 0.055, 'sine', 0.08 * v, 320, 0.008, null, pan);
+      noiseBurst(0.04, 0.14 * v, 4400, 0, null, pan, { filterType: 'bandpass', q: 1.8 });
+      break;
+    case 'bounceShot':
+      tone(1420 * jit, 0.095, 'sine', 0.12 * v, 580, 0, null, pan, { reverb: 0.26 });
+      tone(2180 * jit, 0.06, 'triangle', 0.06 * v, -680, 0.01, null, pan);
+      break;
+    case 'cryo':
+      noiseBurst(0.055, 0.18 * v, 5200 * jit, 0, null, pan, { filterType: 'bandpass', q: 1.2, endCutoff: 2400 });
+      tone(1320 * jit, 0.045, 'sine', 0.055 * v, -380, 0, null, pan);
+      break;
+    case 'thermite':
+      noiseBurst(0.55, 0.34 * v, 2200, 0, null, pan, { endCutoff: 650, attack: 0.03, reverb: 0.35 });
+      tone(165, 0.28, 'sawtooth', 0.16 * v, -90, 0, null, pan, { cutoff: 760 });
+      break;
+    case 'shield':
+      tone(320, 0.34, 'sine', 0.14 * v, 460, 0, null, pan, { reverb: 0.36 });
+      tone(640, 0.28, 'triangle', 0.09 * v, 340, 0.04, null, pan, { reverb: 0.32 });
+      break;
+    case 'shieldHit':
+      tone(920 * jit, 0.065, 'triangle', 0.1 * v, -260, 0, null, pan, { reverb: 0.2 });
+      noiseBurst(0.03, 0.1 * v, 4600, 0, null, pan, { filterType: 'bandpass', q: 2.0 });
+      break;
+    case 'shieldBreak':
+      tone(880, 0.26, 'sawtooth', 0.15 * v, -740, 0, null, pan, { cutoff: 3400, reverb: 0.35 });
+      noiseBurst(0.24, 0.3 * v, 5200, 0, null, pan, { endCutoff: 900, reverb: 0.35 });
+      break;
+    case 'pylon':
+      tone(540, 0.14, 'sine', 0.05 * v, 180, 0, null, pan, { reverb: 0.2 });
+      break;
     case 'explosion':
       // Seismic sub-drop + fiery roar + debris crackle + arena echo
       tone(82, 0.48, 'sine', 0.34 * v, -58, 0, null, pan);
@@ -1612,12 +1890,42 @@ window.addEventListener('blur', () => {
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
 window.addEventListener('keydown', (e) => {
+  if (rebindingAction) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.code === 'Escape') {
+      rebindingAction = null;
+      updateKeybindUI();
+      sfx('ui');
+      return;
+    }
+    // Disallow binding Escape, Enter, WASD or Arrow movement keys directly
+    if (e.code === 'Enter' || e.code === 'KeyW' || e.code === 'KeyA' || e.code === 'KeyS' || e.code === 'KeyD' ||
+        e.code.startsWith('Arrow')) {
+      sfx('empty');
+      return;
+    }
+    const prevCode = getKeybind(rebindingAction);
+    for (const act in userPrefs.keybinds) {
+      if (act !== rebindingAction && userPrefs.keybinds[act] === e.code) {
+        userPrefs.keybinds[act] = prevCode;
+      }
+    }
+    userPrefs.keybinds[rebindingAction] = e.code;
+    rebindingAction = null;
+    saveUserPrefs();
+    updateKeybindUI();
+    if (typeof resetHUDCache === 'function') resetHUDCache();
+    sfx('pickup');
+    return;
+  }
+
   if (e.code === 'Space' || e.code.startsWith('Arrow') ||
       (e.code === 'Tab' && game.state === 'playing')) e.preventDefault();
   keys[e.code] = true;
   if (e.repeat) return;
 
-  if (e.code === 'KeyM') {
+  if (e.code === getKeybind('mute')) {
     if (typeof toggleMute === 'function') toggleMute();
     return;
   }
@@ -1630,13 +1938,13 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   if (game.state !== 'playing' || !player || !player.alive) return;
-  if (e.code === 'KeyR' && typeof startReload === 'function') startReload(player);
-  if (e.code === 'Space' && typeof tryDash === 'function') tryDash();
-  if (e.code === 'KeyQ' && typeof switchWeapon === 'function') switchWeapon(player.activeSlot === 0 ? 1 : 0);
+  if (e.code === getKeybind('reload') && typeof startReload === 'function') startReload(player);
+  if (e.code === getKeybind('dash') && typeof tryDash === 'function') tryDash();
+  if (e.code === getKeybind('swap') && typeof switchWeapon === 'function') switchWeapon(player.activeSlot === 0 ? 1 : 0);
   if (e.code === 'Digit1' && typeof switchWeapon === 'function') switchWeapon(0);
   if (e.code === 'Digit2' && typeof switchWeapon === 'function') switchWeapon(1);
-  if (e.code === 'KeyE' && typeof interactPickup === 'function') interactPickup();
-  if (e.code === 'KeyG' && typeof tryUseGadget === 'function') tryUseGadget();
+  if (e.code === getKeybind('interact') && typeof interactPickup === 'function') interactPickup();
+  if (e.code === getKeybind('gadget') && typeof tryUseGadget === 'function') tryUseGadget();
   if (e.code === 'KeyH' && isPracticeMode() && !player.inSafeZone && typeof returnToSafeZone === 'function') {
     returnToSafeZone();
   }
@@ -1710,6 +2018,62 @@ for (const button of document.querySelectorAll('[data-audio-toggle]')) {
 }
 for (const slider of document.querySelectorAll('[data-audio-volume]')) {
   slider.addEventListener('input', () => setAudioVolume(slider.value));
+}
+for (const button of document.querySelectorAll('[data-lang]')) {
+  button.addEventListener('click', () => {
+    setLanguage(button.dataset.lang);
+    sfx('ui');
+  });
+}
+const quickLangBtn = document.getElementById('quickLangBtn');
+if (quickLangBtn) {
+  quickLangBtn.addEventListener('click', () => {
+    setLanguage(userPrefs.lang === 'en' ? 'vi' : 'en');
+    sfx('ui');
+  });
+}
+for (const button of document.querySelectorAll('[data-crosshair-style]')) {
+  button.addEventListener('click', () => {
+    if (!CROSSHAIR_STYLES.includes(button.dataset.crosshairStyle)) return;
+    userPrefs.crosshair.style = button.dataset.crosshairStyle;
+    saveUserPrefs();
+    updateCrosshairUI();
+    sfx('ui');
+  });
+}
+for (const button of document.querySelectorAll('[data-crosshair-color]')) {
+  button.addEventListener('click', () => {
+    userPrefs.crosshair.color = button.dataset.crosshairColor;
+    saveUserPrefs();
+    updateCrosshairUI();
+    sfx('ui');
+  });
+}
+const chSizeSlider = document.querySelector('[data-crosshair-size]');
+if (chSizeSlider) {
+  chSizeSlider.addEventListener('input', () => {
+    userPrefs.crosshair.size = clamp((Number(chSizeSlider.value) || 100) / 100, 0.7, 1.6);
+    saveUserPrefs();
+    updateCrosshairUI();
+  });
+}
+for (const button of document.querySelectorAll('[data-keybind]')) {
+  button.addEventListener('click', () => {
+    rebindingAction = rebindingAction === button.dataset.keybind ? null : button.dataset.keybind;
+    updateKeybindUI();
+    sfx('ui');
+  });
+}
+const resetKeysBtn = document.getElementById('resetKeybindsBtn');
+if (resetKeysBtn) {
+  resetKeysBtn.addEventListener('click', () => {
+    rebindingAction = null;
+    userPrefs.keybinds = { ...DEFAULT_KEYBINDS };
+    saveUserPrefs();
+    updateKeybindUI();
+    if (typeof resetHUDCache === 'function') resetHUDCache();
+    sfx('pickup');
+  });
 }
 
 if (UI.slot0) UI.slot0.addEventListener('click', () => { if (typeof switchWeapon === 'function') switchWeapon(0); });
@@ -1850,6 +2214,8 @@ updateDeployDeckUI();
 updateFpsToggleUI();
 updateGraphicsQualityUI();
 updateAudioSettingsUI();
+updateCrosshairUI();
+updateKeybindUI();
 
 /* ---------------------------------------------------------
    World generation (static cover, destructible crates,
@@ -1936,6 +2302,7 @@ function generateBarrels() {
       if (list.some((b) => distance(x, y, b.x, b.y) < 110)) continue;
       list.push({
         x, y, r: 16, hp: 36, maxHp: 36,
+        kind: (i % 3 === 1) ? 'cryo' : 'fuel',
         alive: true, hitFlash: 0, burnT: 0, seed: rand(0, TAU),
       });
       break;
@@ -1968,6 +2335,47 @@ function generateBoostPads() {
       }
       x = clamp(c.x + rand(-110, 110), 160, WORLD - 160);
       y = clamp(c.y + rand(-110, 110), 160, WORLD - 160);
+    }
+  }
+  return list;
+}
+
+function generateShieldPylons() {
+  const list = [];
+  const targets = DISTRICTS.slice(0, 6);
+  for (let i = 0; i < targets.length; i++) {
+    const d = targets[i];
+    let x = d.x;
+    let y = d.y;
+    for (let tries = 0; tries < 30; tries++) {
+      if (!pointInObstacle(x, y, 42) && !barrels.some((b) => distance(x, y, b.x, b.y) < 56)) {
+        list.push({
+          x, y, r: 22, auraR: 84,
+          charge: 120, maxCharge: 120,
+          cooldown: 0, maxCooldown: 28,
+          pulse: rand(0, TAU),
+        });
+        break;
+      }
+      x = clamp(d.x + rand(-110, 110), 180, WORLD - 180);
+      y = clamp(d.y + rand(-110, 110), 180, WORLD - 180);
+    }
+  }
+  return list;
+}
+
+function generateStealthZones() {
+  const list = [];
+  for (let i = 0; i < 14; i++) {
+    for (let tries = 0; tries < 45; tries++) {
+      const x = rand(220, WORLD - 220);
+      const y = rand(220, WORLD - 220);
+      const r = rand(68, 92);
+      if (pointInObstacle(x, y, r * 0.45)) continue;
+      if (list.some((s) => distance(x, y, s.x, s.y) < 340)) continue;
+      if (shieldPylons.some((p) => distance(x, y, p.x, p.y) < 160)) continue;
+      list.push({ x, y, r, seed: rand(0, TAU) });
+      break;
     }
   }
   return list;
@@ -2009,6 +2417,8 @@ const FLOOR_WEAPON_POOL = [
   'pulse', 'pulse', 'pulse', 'pulse', 'pulse', 'pulse',
   'dmr', 'dmr', 'dmr', 'dmr', 'dmr', 'dmr',
   'lmg', 'lmg', 'lmg', 'lmg', 'lmg', 'lmg',
+  'ricochet', 'ricochet', 'ricochet', 'ricochet', 'ricochet',
+  'cryo', 'cryo', 'cryo', 'cryo', 'cryo',
   'sniper', 'sniper', 'sniper', 'sniper', 'sniper',
   'railgun', 'minigun', 'bazooka', 'bazooka',
 ];
@@ -2024,8 +2434,8 @@ function generatePickups() {
   }
   for (let i = 0; i < 20; i++) defs.push({ kind: 'health' });
   for (let i = 0; i < 16; i++) defs.push({ kind: 'armor' });
-  for (let i = 0; i < 16; i++) {
-    defs.push({ kind: 'gadget', gadget: pick(['frag', 'frag', 'emp', 'smoke']) });
+  for (let i = 0; i < 20; i++) {
+    defs.push({ kind: 'gadget', gadget: pick(['frag', 'frag', 'emp', 'smoke', 'thermite', 'thermite', 'shield', 'shield']) });
   }
 
   const list = [];
@@ -2068,34 +2478,34 @@ function generateSafeZoneLayout() {
   safeZoneDummies = [];
   if (!isPracticeMode()) return;
 
-  // Dedicated 1400x820 Safe Zone Map: Armory Bay (left) + Firing Range (right) + Deploy Pad (bottom)
+  // Dedicated 1400x820 Safe Zone Map: Armory Bay (14 weapons, 2x7) + 5 Gadgets + Skin Forge + Firing Range
   const keysList = Object.keys(WEAPONS);
   for (let i = 0; i < keysList.length; i++) {
-    const col = i % 6;
-    const row = Math.floor(i / 6);
+    const col = i % 7;
+    const row = Math.floor(i / 7);
     safeZoneStations.push({
       kind: 'weapon',
       weapon: keysList[i],
-      x: 152 + col * 124,
-      y: 196 + row * 116,
-      r: 22,
+      x: 122 + col * 112,
+      y: 196 + row * 114,
+      r: 21,
     });
   }
-  const gadgetIds = ['frag', 'emp', 'smoke'];
+  const gadgetIds = ['frag', 'emp', 'smoke', 'thermite', 'shield'];
   for (let i = 0; i < gadgetIds.length; i++) {
     safeZoneStations.push({
       kind: 'gadget',
       gadget: gadgetIds[i],
-      x: 200 + i * 134,
+      x: 132 + i * 108,
       y: 446,
-      r: 21,
+      r: 20,
     });
   }
   safeZoneStations.push({
     kind: 'skin',
-    x: 650,
+    x: 716,
     y: 446,
-    r: 23,
+    r: 22,
   });
 
   // Three live regenerating firing-range dummies inside the dedicated right-side ballistic bay.
@@ -2171,11 +2581,15 @@ function setupBackdrop() {
   rebuildObstacleGrid();
   barrels = generateBarrels();
   boostPads = generateBoostPads();
+  shieldPylons = generateShieldPylons();
+  stealthZones = generateStealthZones();
   decor = generateDecor();
   pickups = [];
   bullets = [];
   projectiles = [];
   smokes = [];
+  hazards = [];
+  domes = [];
   decals = [];
   beams = [];
   if (typeof clearParticles === 'function') clearParticles();

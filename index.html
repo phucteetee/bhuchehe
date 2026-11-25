@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
-<title>BATTLEGROUND — Tactical Royale v0.1.4</title>
-<link rel="stylesheet" href="style.css?v=13" />
+<title>BATTLEGROUND — Tactical Royale v0.1.5</title>
+<link rel="stylesheet" href="style.css?v=15" />
 </head>
 <body>
 <canvas id="game"></canvas>
@@ -16,8 +16,6 @@
       <div class="pill elims" id="elimsPill"><b id="killCount">0</b><span>ELIMS</span></div>
       <div class="pill safe hidden" id="safePill"><span class="safeDot"></span><span>SAFE ZONE</span></div>
       <div class="pill" id="alivePill"><span class="dot"></span><b id="aliveCount">30</b><span>ALIVE</span></div>
-      <div class="pill zone" id="zonePill"><span class="zoneIcon"></span><span id="zoneText">ZONE 1 · 30s</span></div>
-      <div class="pill supply" id="supplyPill"><span class="supplyIcon"></span><span id="supplyText">CACHE 01:00</span></div>
       <div class="pill aura" id="auraPill"><span class="auraStar">✦</span><b id="auraCount">0</b><span>AURA</span></div>
     </div>
 
@@ -58,25 +56,34 @@
       <button type="button" class="szSlotBtn active" data-sz-slot="0">SLOT 1</button>
       <button type="button" class="szSlotBtn" data-sz-slot="1">SLOT 2</button>
     </div>
-    <div class="szSectionLabel">WEAPONS (12)</div>
+    <div class="szSectionLabel">WEAPONS (14)</div>
     <div id="safeZoneWeapons" class="szWeaponGrid"></div>
     <div class="szSectionLabel">WEAPON FINISH</div>
     <div id="safeZoneSkins" class="szChipRow"></div>
-    <div class="szSectionLabel">TACTICAL GADGET</div>
-    <div id="safeZoneGadgets" class="szChipRow threeCol"></div>
+    <div class="szSectionLabel">TACTICAL GADGET (5)</div>
+    <div id="safeZoneGadgets" class="szChipRow"></div>
     <button id="deployArenaBtn" type="button" class="szDeployBtn">
       <span>TELEPORT TO COMBAT</span>
       <kbd>T</kbd>
     </button>
   </aside>
 
-  <div id="minimapWrap">
-    <div class="hudCorners" aria-hidden="true"></div>
-    <canvas id="minimap" width="180" height="180"></canvas>
-    <div id="minimapLabel">RADAR</div>
-  </div>
+  <div id="topRightDock">
+    <div id="radarRow">
+      <div id="zoneBar">
+        <div class="pill zone" id="zonePill"><span class="zoneIcon"></span><span id="zoneText">ZONE 1 · 30s</span></div>
+        <div class="pill supply" id="supplyPill"><span class="supplyIcon"></span><span id="supplyText">CACHE 01:00</span></div>
+      </div>
 
-  <div id="feed"></div>
+      <div id="minimapWrap">
+        <div class="hudCorners" aria-hidden="true"></div>
+        <canvas id="minimap" width="180" height="180"></canvas>
+        <div id="minimapLabel">RADAR</div>
+      </div>
+    </div>
+
+    <div id="feed"></div>
+  </div>
 
   <div id="stormWarn"><span>!</span><i id="warnArrow" aria-hidden="true"></i> <em>GET INSIDE THE ZONE</em> <b id="warnDist">0m</b></div>
 
@@ -167,18 +174,19 @@
       <div class="brandMark" aria-hidden="true"><span></span></div>
       <div class="brandTitles">
         <div class="brandLogo">BATTLE<span>GROUND</span></div>
-        <div class="brandVer">RELEASE 0.1.4 · TACTICAL ROYALE</div>
+        <div class="brandVer">RELEASE 0.1.5 · TACTICAL ROYALE</div>
       </div>
     </div>
 
     <nav class="lobbyNav" aria-label="Main navigation">
-      <button type="button" class="navTab active" id="navPlayBtn">PLAY</button>
-      <button type="button" class="navTab" id="armoryBtn">ARMORY</button>
-      <button type="button" class="navTab" id="careerBtn">CAREER</button>
-      <button type="button" class="navTab" id="settingsBtn">SETTINGS</button>
+      <button type="button" class="navTab active" id="navPlayBtn" data-i18n="navPlay">PLAY</button>
+      <button type="button" class="navTab" id="armoryBtn" data-i18n="navArmory">ARMORY</button>
+      <button type="button" class="navTab" id="careerBtn" data-i18n="navCareer">CAREER</button>
+      <button type="button" class="navTab" id="settingsBtn" data-i18n="navSettings">SETTINGS</button>
     </nav>
 
     <div class="headerStatus">
+      <button type="button" class="miniChip langQuickChip" id="quickLangBtn" title="Switch Language (EN / VI)">EN</button>
       <div class="currencyPill" title="Available Armory AURA">
         <span class="auraStar">✦</span>
         <b id="menuBankAura">1,000,000</b>
@@ -199,7 +207,7 @@
     <section class="lobbyCol lobbyLeft">
       <div class="tacticalCard showcaseCard">
         <div class="cardHead">
-          <span>EQUIPPED OPERATOR</span>
+          <span data-i18n="equippedOp">EQUIPPED OPERATOR</span>
           <em id="menuOpPlanet">MERCURY · ROCKY</em>
         </div>
         <div class="showcaseBody">
@@ -212,18 +220,18 @@
             <h3 id="menuOpName">KAI</h3>
             <p id="menuOpDesc">Mercury duelist · ion aura</p>
             <div class="equippedTrailRow">
-              <span>TRAIL</span>
+              <span data-i18n="trail">TRAIL</span>
               <b id="menuTrailName">NONE</b>
             </div>
-            <button type="button" class="subtleBtn" id="menuQuickArmoryBtn">CUSTOMIZE IN ARMORY &rarr;</button>
+            <button type="button" class="subtleBtn" id="menuQuickArmoryBtn" data-i18n="customizeArmory">CUSTOMIZE IN ARMORY &rarr;</button>
           </div>
         </div>
       </div>
 
       <div class="tacticalCard kitCard">
         <div class="cardHead">
-          <span>TACTICAL KIT</span>
-          <em>FREE LOADOUT PERK</em>
+          <span data-i18n="tacticalKit">TACTICAL KIT</span>
+          <em data-i18n="freePerk">FREE LOADOUT PERK</em>
         </div>
         <div class="kitGrid" id="perkOptions">
           <button type="button" data-perk="vanguard" class="selected" aria-pressed="true">
@@ -249,13 +257,13 @@
 
     <!-- Center Stage: Hero Title Crest over Live Animated Arena -->
     <section class="lobbyCenter" aria-hidden="false">
-      <div class="seasonTag"><i class="liveDot"></i> SEASON 01 · RELEASE 0.1.4</div>
+      <div class="seasonTag"><i class="liveDot"></i> SEASON 01 · RELEASE 0.1.5</div>
       <h1>BATTLE<span>GROUND</span></h1>
-      <p class="tagline">30-operator expanded arena. Dual weapons, tactical gadgets, destructible cover &amp; dedicated Practice Safe Zone map.</p>
+      <p class="tagline" data-i18n="tagline">30-operator expanded arena. 14 weapons including Ricochet &amp; Cryo Beam, 5 gadgets, Cryo barrels, Shield Pylons &amp; Stealth Brushes.</p>
       <div class="rankProgressBox">
         <div class="profileLine">
           <b id="lifetimeAura">0</b>
-          <span>LIFETIME AURA</span>
+          <span data-i18n="lifetimeAura">LIFETIME AURA</span>
           <i id="rankNext">10,000 TO BRONZE</i>
         </div>
         <div class="rankBar"><div id="rankFill"></div></div>
@@ -266,24 +274,24 @@
     <section class="lobbyCol lobbyRight">
       <div class="tacticalCard contractsCard">
         <div class="cardHead">
-          <span>DAILY CONTRACTS</span>
-          <em>RESET 00:00</em>
+          <span data-i18n="dailyContracts">DAILY CONTRACTS</span>
+          <em data-i18n="resetMidnight">RESET 00:00</em>
         </div>
         <div id="contractList"></div>
       </div>
 
       <div class="tacticalCard controlsCard">
         <div class="cardHead">
-          <span>COMBAT CONTROLS</span>
-          <em>ALWAYS SPRINT</em>
+          <span data-i18n="combatControls">COMBAT CONTROLS</span>
+          <em data-i18n="alwaysSprint">ALWAYS SPRINT</em>
         </div>
         <div class="controls compactGrid">
-          <div class="ctrl"><kbd>W A S D</kbd><span>Move</span></div>
-          <div class="ctrl"><kbd>LMB / RMB</kbd><span>Fire / Gadget</span></div>
-          <div class="ctrl"><kbd>1 2 / Q</kbd><span>Switch Gun</span></div>
-          <div class="ctrl"><kbd>E / R</kbd><span>Swap / Reload</span></div>
-          <div class="ctrl"><kbd>SPACE</kbd><span>Dash · i-frames</span></div>
-          <div class="ctrl"><kbd>H / T / B</kbd><span>Safe · TP · Guns</span></div>
+          <div class="ctrl"><kbd>W A S D</kbd><span data-i18n="ctrlMove">Move</span></div>
+          <div class="ctrl"><kbd>LMB / RMB</kbd><span data-i18n="ctrlFire">Fire / Gadget</span></div>
+          <div class="ctrl"><kbd id="ctrlKeySwap">1 2 / Q</kbd><span data-i18n="ctrlSwitch">Switch Gun</span></div>
+          <div class="ctrl"><kbd id="ctrlKeyLoot">E / R</kbd><span data-i18n="ctrlSwap">Loot / Reload</span></div>
+          <div class="ctrl"><kbd id="ctrlKeyDash">SPACE</kbd><span data-i18n="ctrlDash">Dash · i-frames</span></div>
+          <div class="ctrl"><kbd>H / T / B</kbd><span data-i18n="ctrlSafe">Safe · TP · Guns</span></div>
         </div>
       </div>
     </section>
@@ -291,7 +299,7 @@
 
   <footer class="lobbyFooter">
     <div class="modeSelector">
-      <span class="footerLabel">SELECT MODE</span>
+      <span class="footerLabel" data-i18n="selectMode">SELECT MODE</span>
       <div class="modeCards" id="modeOptions">
         <button type="button" data-mode="classic" class="selected" aria-pressed="true">
           <strong>ROYALE</strong>
@@ -316,7 +324,7 @@
 
       <div class="deployWrap">
         <button id="playBtn" class="bigBtn deployBtn">
-          <span class="deployText"><em>DROP IN</em><small>PRESS ENTER TO LAUNCH</small></span>
+          <span class="deployText"><em data-i18n="dropIn">DROP IN</em><small data-i18n="pressEnter">PRESS ENTER TO LAUNCH</small></span>
           <span class="deployArrow">&rarr;</span>
         </button>
       </div>
@@ -329,15 +337,77 @@
   <div class="panel settingsPanel">
     <div class="panelTopBar">
       <div>
-        <div class="eyebrow">SYSTEM CONFIGURATION</div>
-        <h2>SETTINGS</h2>
+        <div class="eyebrow" data-i18n="systemConfig">SYSTEM CONFIGURATION</div>
+        <h2 data-i18n="settingsTitle">SETTINGS</h2>
       </div>
-      <button id="settingsBackBtn" class="ghostBtn">CLOSE</button>
+      <button id="settingsBackBtn" class="ghostBtn" data-i18n="close">CLOSE</button>
     </div>
 
     <div class="settingsBody">
       <div class="settingsCard">
-        <div class="cardHead"><span>GRAPHICS &amp; PERFORMANCE</span><em>MULTI-DEVICE ENGINE</em></div>
+        <div class="cardHead"><span data-i18n="langHead">LANGUAGE / NGÔN NGỮ</span><em data-i18n="langSub">INTERFACE LOCALIZATION</em></div>
+        <div class="qualityOptions langOptions" role="group" aria-label="Language">
+          <button type="button" data-lang="en" class="selected" aria-pressed="true">ENGLISH</button>
+          <button type="button" data-lang="vi" aria-pressed="false">TIẾNG VIỆT</button>
+        </div>
+      </div>
+
+      <div class="settingsCard">
+        <div class="cardHead"><span data-i18n="crosshairHead">CROSSHAIR CUSTOMIZER</span><em data-i18n="crosshairSub">LIVE RETICLE PREVIEW</em></div>
+        <div class="crosshairGrid">
+          <canvas id="crosshairPreview" width="84" height="84" aria-hidden="true"></canvas>
+          <div class="crosshairControls">
+            <div class="crossRow">
+              <span data-i18n="crossStyle">STYLE</span>
+              <div class="qualityOptions compactOptions">
+                <button type="button" data-crosshair-style="cross" class="selected" aria-pressed="true">CROSS</button>
+                <button type="button" data-crosshair-style="dot" aria-pressed="false">DOT</button>
+                <button type="button" data-crosshair-style="circle" aria-pressed="false">CIRCLE</button>
+                <button type="button" data-crosshair-style="tactical" aria-pressed="false">TACTICAL</button>
+              </div>
+            </div>
+            <div class="crossRow">
+              <span data-i18n="crossColor">COLOR</span>
+              <div class="swatchRow">
+                <button type="button" class="swatchBtn selected" data-crosshair-color="#ffffff" style="--sw:#ffffff" aria-label="White"></button>
+                <button type="button" class="swatchBtn" data-crosshair-color="#5ee7ff" style="--sw:#5ee7ff" aria-label="Cyan"></button>
+                <button type="button" class="swatchBtn" data-crosshair-color="#6ff2b0" style="--sw:#6ff2b0" aria-label="Green"></button>
+                <button type="button" class="swatchBtn" data-crosshair-color="#ffd166" style="--sw:#ffd166" aria-label="Gold"></button>
+                <button type="button" class="swatchBtn" data-crosshair-color="#ff5a5f" style="--sw:#ff5a5f" aria-label="Red"></button>
+                <button type="button" class="swatchBtn" data-crosshair-color="#ff5cf4" style="--sw:#ff5cf4" aria-label="Magenta"></button>
+              </div>
+            </div>
+            <div class="crossRow">
+              <span data-i18n="crossSize">SIZE</span>
+              <div class="crossSliderWrap">
+                <input type="range" min="70" max="160" value="100" data-crosshair-size aria-label="Crosshair size" />
+                <b id="crosshairSizeVal">100%</b>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="settingsCard">
+        <div class="cardHead">
+          <span data-i18n="keybindsHead">CUSTOM KEYBINDS</span>
+          <div class="cardHeadRight">
+            <em data-i18n="keybindsSub">CLICK TO REBIND · ESC CANCEL</em>
+            <button type="button" class="miniChip" id="resetKeybindsBtn" data-i18n="resetKeys">RESET DEFAULTS</button>
+          </div>
+        </div>
+        <div class="keybindGrid">
+          <div class="kbItem"><span data-i18n="kbReload">Reload</span><button type="button" class="kbBtn" data-keybind="reload">R</button></div>
+          <div class="kbItem"><span data-i18n="kbDash">Dash</span><button type="button" class="kbBtn" data-keybind="dash">SPACE</button></div>
+          <div class="kbItem"><span data-i18n="kbSwap">Switch Gun</span><button type="button" class="kbBtn" data-keybind="swap">Q</button></div>
+          <div class="kbItem"><span data-i18n="kbInteract">Loot / Interact</span><button type="button" class="kbBtn" data-keybind="interact">E</button></div>
+          <div class="kbItem"><span data-i18n="kbGadget">Throw Gadget</span><button type="button" class="kbBtn" data-keybind="gadget">G</button></div>
+          <div class="kbItem"><span data-i18n="kbMute">Mute Audio</span><button type="button" class="kbBtn" data-keybind="mute">M</button></div>
+        </div>
+      </div>
+
+      <div class="settingsCard">
+        <div class="cardHead"><span data-i18n="graphicsHead">GRAPHICS &amp; PERFORMANCE</span><em data-i18n="multiDevice">MULTI-DEVICE ENGINE</em></div>
         <div class="qualityControl" aria-label="Graphics quality">
           <div class="qualityOptions">
             <button type="button" data-quality="verylow" aria-pressed="false">POTATO</button>
@@ -355,11 +425,11 @@
             </div>
           </div>
         </div>
-        <p class="settingHint">Potato &amp; Low disable blur, decals and heavy shaders for 60 FPS on weak devices. High &amp; Ultra enable dynamic lighting halos and storm lightning.</p>
+        <p class="settingHint" data-i18n="graphicsHint">Potato &amp; Low disable blur, decals and heavy shaders for 60 FPS on weak devices. High &amp; Ultra enable dynamic lighting halos, hex shields and storm lightning.</p>
       </div>
 
       <div class="settingsCard">
-        <div class="cardHead"><span>AUDIO MIXER</span><em>SYNTHESIZED WEB AUDIO</em></div>
+        <div class="cardHead"><span data-i18n="audioHead">AUDIO MIXER</span><em data-i18n="synthAudio">SYNTHESIZED WEB AUDIO</em></div>
         <div class="audioControl" aria-label="Audio settings">
           <button type="button" data-audio-toggle aria-pressed="true">MUSIC ON</button>
           <label class="volumeWrap" aria-label="Master volume">
@@ -367,7 +437,7 @@
           </label>
           <small data-audio-status>MUSIC ON · 70% VOLUME</small>
         </div>
-        <p class="settingHint">Press <kbd>M</kbd> at any time to mute or unmute master audio.</p>
+        <p class="settingHint" id="audioMuteHint">Press <kbd>M</kbd> at any time to mute or unmute master audio.</p>
       </div>
     </div>
   </div>
@@ -378,15 +448,15 @@
   <div class="panel armoryPanel">
     <div class="panelTopBar">
       <div>
-        <div class="eyebrow">OPERATOR ARMORY</div>
-        <h2>PLANET ROSTER</h2>
+        <div class="eyebrow" data-i18n="armoryEyebrow">OPERATOR ARMORY</div>
+        <h2 data-i18n="armoryTitle">ROSTER &amp; FINISHERS</h2>
       </div>
       <div class="panelTopRight">
         <div class="armoryTop"><span>AVAILABLE AURA</span><b id="armoryAura">0</b></div>
-        <button id="armoryBackBtn" class="ghostBtn">BACK TO LOBBY</button>
+        <button id="armoryBackBtn" class="ghostBtn" data-i18n="backLobby">BACK TO LOBBY</button>
       </div>
     </div>
-    <p class="armoryIntro">8 PLANET OPERATORS · DISTINCT PLANETARY SURFACES · SIGNATURE AURA COLORS · COSMETIC ONLY</p>
+    <p class="armoryIntro" data-i18n="armoryIntro">8 PLANET OPERATORS · 5 TRAILS · 6 FINISHER VFX (BUY WITH AURA) · COSMETIC ONLY</p>
     <div id="armoryGrid" class="armoryGrid"></div>
   </div>
 </div>
@@ -396,10 +466,10 @@
   <div class="panel careerPanel">
     <div class="panelTopBar">
       <div>
-        <div class="eyebrow">SERVICE RECORD</div>
-        <h2>CAREER</h2>
+        <div class="eyebrow" data-i18n="careerEyebrow">SERVICE RECORD</div>
+        <h2 data-i18n="careerTitle">CAREER</h2>
       </div>
-      <button id="careerBackBtn" class="ghostBtn">BACK TO LOBBY</button>
+      <button id="careerBackBtn" class="ghostBtn" data-i18n="backLobby">BACK TO LOBBY</button>
     </div>
     <div class="profileStrip careerStrip">
       <div class="rankBadge" id="careerRankBadge">ROOKIE</div>
@@ -411,7 +481,7 @@
     </div>
     <div id="careerStats" class="careerStats"></div>
     <div class="careerMastery">
-      <div class="careerHead">WEAPON MASTERY</div>
+      <div class="careerHead" data-i18n="weaponMastery">WEAPON MASTERY (25+ GLOW · 50+ APEX TRACER)</div>
       <div id="careerWeapons" class="careerWeapons"></div>
     </div>
   </div>
@@ -422,14 +492,14 @@
   <div class="panel pausePanel">
     <div class="menuTopTools">
       <button type="button" class="miniChip" data-fps-toggle aria-pressed="false">FPS HUD: OFF</button>
-      <span class="verTag">v0.1.4</span>
+      <span class="verTag">v0.1.5</span>
     </div>
-    <div class="eyebrow">MATCH PAUSED</div>
-    <h2>HOLD POSITION</h2>
+    <div class="eyebrow" data-i18n="matchPaused">MATCH PAUSED</div>
+    <h2 data-i18n="holdPosition">HOLD POSITION</h2>
     <div class="controls compact">
-      <div class="ctrl"><kbd>1 2 / Q</kbd><span>Switch Gun</span></div>
-      <div class="ctrl"><kbd>RMB / G</kbd><span>Throw Gadget</span></div>
-      <div class="ctrl"><kbd>E / R</kbd><span>Loot / Reload</span></div>
+      <div class="ctrl"><kbd id="pauseKeySwap">1 2 / Q</kbd><span data-i18n="ctrlSwitch">Switch Gun</span></div>
+      <div class="ctrl"><kbd id="pauseKeyGadget">RMB / G</kbd><span data-i18n="kbGadget">Throw Gadget</span></div>
+      <div class="ctrl"><kbd id="pauseKeyLoot">E / R</kbd><span data-i18n="ctrlSwap">Loot / Reload</span></div>
     </div>
     <div class="qualityControl compactQuality" aria-label="Graphics quality">
       <span>GRAPHICS</span>
@@ -456,9 +526,9 @@
       <small data-audio-status>MUSIC ON · 70% VOLUME</small>
     </div>
     <div class="btnRow">
-      <button id="resumeBtn" class="bigBtn"><em>RESUME</em> <span>&rarr;</span></button>
-      <button id="pauseSafeBtn" class="ghostBtn hidden">RETURN TO SAFE ZONE</button>
-      <button id="quitBtn" class="ghostBtn">QUIT TO LOBBY</button>
+      <button id="resumeBtn" class="bigBtn"><em data-i18n="resume">RESUME</em> <span>&rarr;</span></button>
+      <button id="pauseSafeBtn" class="ghostBtn hidden" data-i18n="returnSafe">RETURN TO SAFE ZONE</button>
+      <button id="quitBtn" class="ghostBtn" data-i18n="quitLobby">QUIT TO LOBBY</button>
     </div>
     <p id="pauseHint" class="hint">Quitting forfeits unbanked AURA</p>
   </div>
@@ -485,17 +555,17 @@
     <div id="endRecord" class="recordLine"></div>
     <div id="endContracts" class="contractLine"></div>
     <div class="btnRow endActions">
-      <button id="againBtn" class="bigBtn"><em>PLAY AGAIN</em> <span>&#8635;</span></button>
-      <button id="endMenuBtn" class="ghostBtn">BACK TO LOBBY</button>
+      <button id="againBtn" class="bigBtn"><em data-i18n="playAgain">PLAY AGAIN</em> <span>&#8635;</span></button>
+      <button id="endMenuBtn" class="ghostBtn" data-i18n="backLobby">BACK TO LOBBY</button>
     </div>
-    <p class="hint">Press <kbd>ENTER</kbd> to redeploy</p>
+    <p class="hint" data-i18n="pressRedeploy">PRESS ENTER TO REDEPLOY</p>
   </div>
 </div>
 
-<script src="js/core.js?v=12"></script>
-<script src="js/profile.js?v=11"></script>
-<script src="js/combat.js?v=12"></script>
-<script src="js/render.js?v=12"></script>
-<script src="js/main.js?v=12"></script>
+<script src="js/core.js?v=15"></script>
+<script src="js/profile.js?v=15"></script>
+<script src="js/combat.js?v=15"></script>
+<script src="js/render.js?v=15"></script>
+<script src="js/main.js?v=15"></script>
 </body>
 </html>
