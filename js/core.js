@@ -55,10 +55,10 @@ const WEAPONS = {
   smg: {
     name: 'SMG', short: 'S', tier: 2, model: 'smg',
     dmg: 10, rpm: 860, mag: 34, reload: 1.4,
-    spread: 0.024, bloomMul: 0.22, bloomMax: 0.026, moveSpreadMul: 1.22,
-    speed: 1820, pellets: 1, range: 820, pref: 245,
-    color: '#5ee7ff', tracer: '#b7f7ff', kick: 0.8, len: 30, thick: 8, sound: 'smg',
-    critBonus: 0.05,
+    spread: 0.018, bloomMul: 0.16, bloomMax: 0.014, moveSpreadMul: 1.15,
+    speed: 1900, pellets: 1, range: 840, pref: 260,
+    color: '#5ee7ff', tracer: '#b7f7ff', kick: 0.72, len: 30, thick: 8, sound: 'smg',
+    critBonus: 0.06,
   },
   shotgun: {
     name: 'SHOTGUN', short: 'G', tier: 2, model: 'shotgun',
@@ -84,8 +84,9 @@ const WEAPONS = {
   pulse: {
     name: 'PULSE AR', short: 'PL', tier: 3, model: 'pulse',
     dmg: 15, rpm: 145, mag: 24, reload: 1.75, burstCount: 3, burstGap: 0.055,
-    spread: 0.014, speed: 2150, pellets: 1, range: 1320, pref: 420,
-    color: '#38f2d8', tracer: '#a8fff0', kick: 2.2, len: 42, thick: 10, sound: 'pulse',
+    spread: 0.012, bloomMul: 0.15, bloomMax: 0.012, moveSpreadMul: 1.18,
+    speed: 2200, pellets: 1, range: 1350, pref: 430,
+    color: '#38f2d8', tracer: '#a8fff0', kick: 2.0, len: 42, thick: 10, sound: 'pulse',
     critBonus: 0.1,
   },
   dmr: {
@@ -98,9 +99,10 @@ const WEAPONS = {
   lmg: {
     name: 'LMG', short: 'LM', tier: 4, model: 'lmg',
     dmg: 13.5, rpm: 670, mag: 70, reload: 3.05,
-    spread: 0.078, speed: 1850, pellets: 1, range: 1020, pref: 380,
-    color: '#c7f464', tracer: '#eaffb0', kick: 2.2, len: 48, thick: 14, sound: 'lmg',
-    critBonus: 0.04, moveMul: 0.95,
+    spread: 0.026, bloomMul: 0.18, bloomMax: 0.018, moveSpreadMul: 1.2,
+    speed: 1980, pellets: 1, range: 1080, pref: 400,
+    color: '#c7f464', tracer: '#eaffb0', kick: 1.85, len: 48, thick: 14, sound: 'lmg',
+    critBonus: 0.05, moveMul: 0.95,
   },
   ricochet: {
     name: 'RICOCHET', short: 'RC', tier: 4, model: 'ricochet',
@@ -112,10 +114,10 @@ const WEAPONS = {
   cryo: {
     name: 'CRYO BEAM', short: 'CR', tier: 4, model: 'cryo',
     dmg: 11.5, rpm: 760, mag: 44, reload: 2.1,
-    spread: 0.042, bloomMul: 0.18, bloomMax: 0.028, moveSpreadMul: 1.15,
-    speed: 1220, pellets: 1, range: 470, pref: 210,
-    color: '#76e8ff', tracer: '#daf9ff', kick: 0.65, len: 42, thick: 14, sound: 'cryo',
-    critBonus: 0.03, chill: 0.78, cryo: true, crateDmgMul: 1.15, moveMul: 0.96,
+    spread: 0.022, bloomMul: 0.14, bloomMax: 0.014, moveSpreadMul: 1.12,
+    speed: 1380, pellets: 1, range: 510, pref: 230,
+    color: '#76e8ff', tracer: '#daf9ff', kick: 0.55, len: 42, thick: 14, sound: 'cryo',
+    critBonus: 0.04, chill: 0.78, cryo: true, crateDmgMul: 1.15, moveMul: 0.96,
   },
   sniper: {
     name: 'SNIPER', short: 'SR', tier: 4, model: 'sniper',
@@ -134,8 +136,9 @@ const WEAPONS = {
   minigun: {
     name: 'MINIGUN', short: 'MG', tier: 5, model: 'minigun',
     dmg: 8.5, rpm: 1260, mag: 96, reload: 3.45,
-    spread: 0.068, heatSpread: 0.036, speed: 1920, pellets: 1, range: 860, pref: 310,
-    color: '#ffbe3b', tracer: '#ffe38f', kick: 1.35, len: 50, thick: 17, sound: 'minigun',
+    spread: 0.024, bloomMul: 0.14, bloomMax: 0.015, heatSpread: 0.014, moveSpreadMul: 1.15,
+    speed: 2050, pellets: 1, range: 920, pref: 340,
+    color: '#ffbe3b', tracer: '#ffe38f', kick: 1.1, len: 50, thick: 17, sound: 'minigun',
     critBonus: 0, critMul: 1.2, knockback: 3.5, crateDmgMul: 1.25,
     spinUp: 0.52, spinDown: 0.85, moveMul: 0.88, firingMoveMul: 0.64,
   },
