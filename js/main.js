@@ -133,7 +133,7 @@ function startMatch() {
   if (UI.interactTouch) UI.interactTouch.classList.add('hidden');
   if (UI.zonePill) UI.zonePill.classList.toggle('hidden', !!mode.practice);
   if (UI.supplyPill) UI.supplyPill.classList.toggle('hidden', !!mode.practice);
-  if (UI.pauseSafeBtn) UI.pauseSafeBtn.classList.toggle('hidden', !mode.practice || (player && player.inSafeZone));
+  if (UI.pauseSafeBtn) UI.pauseSafeBtn.classList.toggle('hidden', !mode.practice);
   if (UI.pauseHint) {
     UI.pauseHint.textContent = mode.practice
       ? 'Practice Mode · Return to Safe Zone or Exit to Lobby'
@@ -294,7 +294,6 @@ function quitToMenu() {
   if (UI.interactTouch) UI.interactTouch.classList.add('hidden');
   if (typeof setSafeZonePanelOpen === 'function') setSafeZonePanelOpen(false);
   if (UI.safeZonePanel) UI.safeZonePanel.classList.add('hidden');
-  if (UI.pauseSafeBtn) UI.pauseSafeBtn.classList.add('hidden');
   if (UI.practiceBar) UI.practiceBar.classList.add('hidden');
   if (UI.safeZoneControls) UI.safeZoneControls.classList.add('hidden');
   if (UI.safeTouch) UI.safeTouch.classList.add('hidden');
@@ -326,7 +325,6 @@ function togglePause() {
     if (game.pausedFrom === 'playing') UI.countdown.classList.add('hidden');
     resetInput();
     UI.toast.className = '';
-    if (UI.pauseSafeBtn) UI.pauseSafeBtn.classList.toggle('hidden', !isPracticeMode() || isPlayerInSafeMap());
     document.body.classList.remove('playing');
     UI.pause.classList.remove('hidden');
     if (typeof updateAudioMix === 'function') updateAudioMix();

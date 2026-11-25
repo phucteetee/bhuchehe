@@ -61,53 +61,83 @@ const OPERATOR_PRESETS = {
 };
 
 const TRAIL_PRESETS = {
-  none: { name: 'NONE', cost: 0, color: '#9fb1bb', light: '#e6eef2', desc: 'Clean boots' },
-  cyan: { name: 'CYAN', cost: 1500, color: '#5ee7ff', light: '#b7f7ff', desc: 'Ion wake' },
-  gold: { name: 'GOLD', cost: 3000, color: '#ffd166', light: '#ffe6a1', desc: 'Aura dust' },
-  inferno: { name: 'INFERNO', cost: 6000, color: '#ff7a3d', light: '#ffd2a1', desc: 'Burning footsteps' },
-  void: { name: 'VOID', cost: 12000, color: '#b06cff', light: '#dcc0ff', desc: 'Collapse wake' },
+  none: { name: 'NONE', cost: 0, color: '#9fb1bb', light: '#e6eef2', desc: 'Clean boots', descVi: 'Bước chân cơ bản' },
+  cyan: { name: 'CYAN', cost: 1500, color: '#5ee7ff', light: '#b7f7ff', desc: 'Ion wake', descVi: 'Vệt điện tử xanh băng' },
+  gold: { name: 'GOLD', cost: 3000, color: '#ffd166', light: '#ffe6a1', desc: 'Aura dust', descVi: 'Bụi ánh sáng hoàng kim' },
+  inferno: { name: 'INFERNO', cost: 6000, color: '#ff7a3d', light: '#ffd2a1', desc: 'Burning footsteps', descVi: 'Vết chân rực lửa' },
+  void: { name: 'VOID', cost: 12000, color: '#b06cff', light: '#dcc0ff', desc: 'Collapse wake', descVi: 'Dư ảnh hư không' },
 };
+
+const FINISHER_PRESETS = {
+  standard: {
+    name: 'PULSE RING', cost: 0, color: '#9fb1bb', light: '#e6eef2',
+    desc: 'Classic shockwave burst', descVi: 'Vòng xung kích tiêu chuẩn',
+  },
+  supernova: {
+    name: 'SUPERNOVA', cost: 35000, color: '#ff9f45', light: '#fff1b8',
+    desc: 'Solar flare & molten star ring', descVi: 'Bùng nổ sao băng rực lửa',
+  },
+  orbital: {
+    name: 'ORBITAL LANCE', cost: 75000, color: '#5ee7ff', light: '#d6fbff',
+    desc: 'Sky-piercing ion laser strike', descVi: 'Tia laser ion giáng từ quỹ đạo',
+  },
+  cryo: {
+    name: 'FROST SHATTER', cost: 90000, color: '#7ef2ff', light: '#ffffff',
+    desc: 'Diamond ice-crystal shatter nova', descVi: 'Bão tinh thể băng kim cương',
+  },
+  singularity: {
+    name: 'VOID RIFT', cost: 125000, color: '#b06cff', light: '#ffc4fb',
+    desc: 'Gravitational rift implosion', descVi: 'Hố đen không gian co sập',
+  },
+};
+
+const MASTERY_TIERS = [
+  { min: 50, label: 'MASTER', labelVi: 'ĐẠI KIỆN TƯỚNG', color: '#ffd166', perk: '✦ PRISM TRACER', perkVi: '✦ ĐẠN LĂNG KÍNH', reward: 3000 },
+  { min: 30, label: 'VETERAN', labelVi: 'KỲ CỰU', color: '#ff9f45', perk: '⚡ MUZZLE GLINT', perkVi: '⚡ CHỚP NÒNG', reward: 1500 },
+  { min: 15, label: 'MARKSMAN', labelVi: 'XẠ THỦ', color: '#5ee7ff', perk: '★ FEED BADGE', perkVi: '★ HUY HIỆU HẠ GỤC', reward: 1000 },
+  { min: 5, label: 'INITIATE', labelVi: 'TÂN BINH', color: '#9fb1bb', perk: '• TRACKED', perkVi: '• KHỞI ĐẦU', reward: 500 },
+];
 
 const CHALLENGE_POOL = [
   {
     id: 'kills', group: 'easy', metric: 'kills', goal: 5, reward: 250,
-    name: 'Eliminate 5 operators',
+    name: 'Eliminate 5 operators', nameVi: 'Hạ gục 5 đối thủ',
   },
   {
     id: 'damage', group: 'easy', metric: 'damage', goal: 1500, reward: 300,
-    name: 'Deal 1,500 damage',
+    name: 'Deal 1,500 damage', nameVi: 'Gây 1.500 sát thương',
   },
   {
     id: 'skins', group: 'easy', metric: 'skins', goal: 3, reward: 250,
-    name: 'Loot 3 skinned weapons',
+    name: 'Loot 3 skinned weapons', nameVi: 'Nhặt 3 vũ khí có skin',
   },
   {
     id: 'sniperKills', group: 'weapon', metric: 'sniperKills', goal: 2, reward: 350,
-    name: 'Get 2 Sniper/Railgun elims',
+    name: 'Get 2 Sniper/Railgun elims', nameVi: 'Hạ 2 mục tiêu bằng Sniper/Railgun',
   },
   {
     id: 'shotgunKills', group: 'weapon', metric: 'shotgunKills', goal: 2, reward: 300,
-    name: 'Get 2 shotgun eliminations',
+    name: 'Get 2 shotgun eliminations', nameVi: 'Hạ 2 mục tiêu bằng Shotgun',
   },
   {
     id: 'rifleKills', group: 'weapon', metric: 'rifleKills', goal: 3, reward: 350,
-    name: 'Get 3 Rifle/Pulse/DMR elims',
+    name: 'Get 3 Rifle/Pulse/Ricochet/DMR elims', nameVi: 'Hạ 3 địch bằng Rifle/Pulse/Ricochet/DMR',
   },
   {
     id: 'heavyKills', group: 'weapon', metric: 'heavyKills', goal: 2, reward: 350,
-    name: 'Get 2 Heavy (LMG/Minigun/Bazooka) elims',
+    name: 'Get 2 Heavy (LMG/Mortar/Minigun/Bazooka) elims', nameVi: 'Hạ 2 địch bằng Súng Hạng Nặng/Cối',
   },
   {
     id: 'top5', group: 'rank', metric: 'top5', goal: 1, reward: 300,
-    name: 'Finish in the top 5',
+    name: 'Finish in the top 5', nameVi: 'Đạt Top 5 chung cuộc',
   },
   {
     id: 'win', group: 'rank', metric: 'win', goal: 1, reward: 500,
-    name: 'Win a match',
+    name: 'Win a match', nameVi: 'Giành Chiến Thắng Top 1',
   },
   {
     id: 'longshot', group: 'rank', metric: 'longshot', goal: 1, reward: 400,
-    name: 'Eliminate from 900m+',
+    name: 'Eliminate from 900m+', nameVi: 'Hạ gục từ khoảng cách 900m+',
   },
 ];
 
@@ -132,6 +162,7 @@ const PROFILE_UI = {
   menuOpPlanet: null,
   menuOpDesc: null,
   menuTrailName: null,
+  menuFinisherName: null,
   menuQuickArmoryBtn: null,
   menuQuickSettingsBtn: null,
   settings: null,
@@ -159,6 +190,7 @@ const FULL_ARMORY_AURA = 1000000;
 function defaultProfile() {
   return {
     version: PROFILE_VERSION,
+    auraSeeded: true,
     auraEarned: FULL_ARMORY_AURA,
     auraBank: FULL_ARMORY_AURA,
     stats: {
@@ -171,8 +203,9 @@ function defaultProfile() {
     unlocked: {
       operators: Object.keys(OPERATOR_PRESETS),
       trails: Object.keys(TRAIL_PRESETS),
+      finishers: ['standard'],
     },
-    equipped: { operator: 'cyan', trail: 'none' },
+    equipped: { operator: 'cyan', trail: 'none', finisher: 'standard' },
   };
 }
 
@@ -180,9 +213,15 @@ function sanitizeProfile(raw) {
   const p = defaultProfile();
   if (!raw || typeof raw !== 'object') return p;
 
-  p.auraBank = Math.max(FULL_ARMORY_AURA, Math.floor(Number(raw.auraBank) || 0));
+  const rawBank = Number(raw.auraBank);
+  if (raw.auraSeeded && Number.isFinite(rawBank) && rawBank >= 0) {
+    p.auraBank = Math.floor(rawBank);
+  } else {
+    p.auraBank = Math.max(FULL_ARMORY_AURA, Math.floor(rawBank || 0));
+  }
+  p.auraSeeded = true;
   const earned = Number(raw.auraEarned);
-  p.auraEarned = Number.isFinite(earned) && earned >= 0 ? Math.floor(earned) : p.auraBank;
+  p.auraEarned = Number.isFinite(earned) && earned >= 0 ? Math.floor(earned) : Math.max(FULL_ARMORY_AURA, p.auraBank);
   if (p.auraEarned < p.auraBank) p.auraEarned = p.auraBank;
 
   if (raw.stats && typeof raw.stats === 'object') {
@@ -207,6 +246,9 @@ function sanitizeProfile(raw) {
     for (const id of (Array.isArray(raw.unlocked.trails) ? raw.unlocked.trails : [])) {
       if (hasOwn(TRAIL_PRESETS, id) && !p.unlocked.trails.includes(id)) p.unlocked.trails.push(id);
     }
+    for (const id of (Array.isArray(raw.unlocked.finishers) ? raw.unlocked.finishers : [])) {
+      if (hasOwn(FINISHER_PRESETS, id) && !p.unlocked.finishers.includes(id)) p.unlocked.finishers.push(id);
+    }
   }
 
   if (raw.equipped && typeof raw.equipped === 'object') {
@@ -215,6 +257,9 @@ function sanitizeProfile(raw) {
     }
     if (typeof raw.equipped.trail === 'string' && p.unlocked.trails.includes(raw.equipped.trail)) {
       p.equipped.trail = raw.equipped.trail;
+    }
+    if (typeof raw.equipped.finisher === 'string' && p.unlocked.finishers.includes(raw.equipped.finisher)) {
+      p.equipped.finisher = raw.equipped.finisher;
     }
   }
 
@@ -461,7 +506,7 @@ function getProfileEarned() {
 }
 
 /* ---------------------------------------------------------
-   Cosmetics
+   Cosmetics & Weapon Mastery
    --------------------------------------------------------- */
 function getEquippedOperator() {
   const p = ensureProfile();
@@ -478,15 +523,89 @@ function getEquippedTrail() {
   return hasOwn(TRAIL_PRESETS, p.equipped.trail) ? TRAIL_PRESETS[p.equipped.trail] : TRAIL_PRESETS.none;
 }
 
+function getEquippedFinisher() {
+  const p = ensureProfile();
+  return hasOwn(FINISHER_PRESETS, p.equipped.finisher) ? FINISHER_PRESETS[p.equipped.finisher] : FINISHER_PRESETS.standard;
+}
+
+function getEquippedFinisherId() {
+  const p = ensureProfile();
+  return hasOwn(FINISHER_PRESETS, p.equipped.finisher) ? p.equipped.finisher : 'standard';
+}
+
+function getWeaponMastery(kills) {
+  const n = Math.max(0, Math.floor(Number(kills) || 0));
+  for (let i = 0; i < MASTERY_TIERS.length; i++) {
+    if (n >= MASTERY_TIERS[i].min) {
+      const next = i > 0 ? MASTERY_TIERS[i - 1] : null;
+      return { ...MASTERY_TIERS[i], nextMin: next ? next.min : null, kills: n };
+    }
+  }
+  return {
+    min: 0, label: '—', labelVi: '—', color: '#87a2ae',
+    perk: '', perkVi: '', reward: 0, nextMin: 5, kills: n,
+  };
+}
+
+function getLiveWeaponKills(weaponKey) {
+  const p = ensureProfile();
+  const base = Math.max(0, Math.floor(Number(p.weaponKills[weaponKey]) || 0));
+  const inMatch = (typeof player !== 'undefined' && player && player.weaponKills)
+    ? Math.max(0, Math.floor(Number(player.weaponKills[weaponKey]) || 0))
+    : 0;
+  return base + inMatch;
+}
+
+function hasMasteryTracer(weaponKey) {
+  if (typeof isPlayerInSafeMap === 'function' && isPlayerInSafeMap()) {
+    return getLiveWeaponKills(weaponKey) >= 50;
+  }
+  return getLiveWeaponKills(weaponKey) >= 50;
+}
+
+function hasMasteryFeedTag(weaponKey) {
+  return getLiveWeaponKills(weaponKey) >= 15;
+}
+
+function noteWeaponMasteryKill(weaponKey, matchKills) {
+  if (!WEAPONS[weaponKey] || (typeof isPracticeMode === 'function' && isPracticeMode())) return;
+  const p = ensureProfile();
+  const base = Math.max(0, Math.floor(Number(p.weaponKills[weaponKey]) || 0));
+  const total = base + Math.max(0, Math.floor(Number(matchKills) || 0));
+  for (let i = 0; i < MASTERY_TIERS.length; i++) {
+    const tier = MASTERY_TIERS[i];
+    if (total === tier.min) {
+      if (typeof grantAura === 'function') grantAura(tier.reward);
+      const vi = typeof isVi === 'function' && isVi();
+      const title = WEAPONS[weaponKey].name + ' ' + (vi ? tier.labelVi : tier.label) + ' · +' + tier.reward + ' AURA';
+      if (typeof showToast === 'function') showToast(title, 2200, 'gold');
+      if (typeof sfx === 'function') sfx('record');
+      break;
+    }
+  }
+}
+
+function getCosmeticCatalog(kind) {
+  if (kind === 'operator') return OPERATOR_PRESETS;
+  if (kind === 'trail') return TRAIL_PRESETS;
+  if (kind === 'finisher') return FINISHER_PRESETS;
+  return null;
+}
+
+function getUnlockedList(p, kind) {
+  if (kind === 'operator') return p.unlocked.operators;
+  if (kind === 'trail') return p.unlocked.trails;
+  if (kind === 'finisher') return p.unlocked.finishers;
+  return null;
+}
+
 function purchaseItem(kind, id) {
   const p = ensureProfile();
-  const item = kind === 'operator'
-    ? (hasOwn(OPERATOR_PRESETS, id) ? OPERATOR_PRESETS[id] : null)
-    : kind === 'trail'
-      ? (hasOwn(TRAIL_PRESETS, id) ? TRAIL_PRESETS[id] : null)
-      : null;
+  const catalog = getCosmeticCatalog(kind);
+  const item = catalog && hasOwn(catalog, id) ? catalog[id] : null;
   if (!item) return false;
-  const list = kind === 'operator' ? p.unlocked.operators : p.unlocked.trails;
+  const list = getUnlockedList(p, kind);
+  if (!list) return false;
   if (list.includes(id)) {
     equipItem(kind, id);
     return true;
@@ -500,13 +619,16 @@ function purchaseItem(kind, id) {
   renderProfileUI();
   renderArmory();
   if (typeof sfx === 'function') sfx('pickup');
-  if (typeof showToast === 'function') showToast(item.name + ' UNLOCKED', 1600, 'gold');
+  if (typeof showToast === 'function') {
+    const unlockedWord = typeof isVi === 'function' && isVi() ? ' ĐÃ MỞ KHÓA' : ' UNLOCKED';
+    showToast(item.name + unlockedWord, 1600, 'gold');
+  }
   return true;
 }
 
 function equipItem(kind, id) {
   const p = ensureProfile();
-  const list = kind === 'operator' ? p.unlocked.operators : kind === 'trail' ? p.unlocked.trails : null;
+  const list = getUnlockedList(p, kind);
   if (!list || !list.includes(id)) return false;
   p.equipped[kind] = id;
   saveProfile();
@@ -544,6 +666,7 @@ function cacheProfileUI() {
   PROFILE_UI.menuOpPlanet = document.getElementById('menuOpPlanet');
   PROFILE_UI.menuOpDesc = document.getElementById('menuOpDesc');
   PROFILE_UI.menuTrailName = document.getElementById('menuTrailName');
+  PROFILE_UI.menuFinisherName = document.getElementById('menuFinisherName');
   PROFILE_UI.menuQuickArmoryBtn = document.getElementById('menuQuickArmoryBtn');
   PROFILE_UI.menuQuickSettingsBtn = document.getElementById('menuQuickSettingsBtn');
   PROFILE_UI.settings = document.getElementById('settings');
@@ -567,11 +690,13 @@ function renderProfileUI() {
   const p = ensureProfile();
   const ui = PROFILE_UI;
   if (!ui.rankBadge) return;
+  const vi = typeof isVi === 'function' && isVi();
 
   const rank = getRank(p.auraEarned);
   const opId = getEquippedOperatorId();
   const operator = OPERATOR_PRESETS[opId] || OPERATOR_PRESETS.cyan;
   const trail = getEquippedTrail();
+  const finisher = getEquippedFinisher();
 
   if (UI.operatorName) {
     UI.operatorName.textContent = operator.name;
@@ -603,6 +728,11 @@ function renderProfileUI() {
     ui.menuTrailName.style.color = trail.color;
     ui.menuTrailName.style.borderColor = trail.color + '66';
   }
+  if (ui.menuFinisherName) {
+    ui.menuFinisherName.textContent = finisher.name;
+    ui.menuFinisherName.style.color = finisher.color;
+    ui.menuFinisherName.style.borderColor = finisher.color + '66';
+  }
   if (ui.menuMiniPortrait && typeof drawOperatorPortrait === 'function') {
     drawOperatorPortrait(ui.menuMiniPortrait, opId);
   }
@@ -612,8 +742,8 @@ function renderProfileUI() {
   if (ui.lifetimeAura) ui.lifetimeAura.textContent = p.auraEarned.toLocaleString('en-US');
   if (ui.rankNext) {
     ui.rankNext.textContent = rank.next
-      ? rank.toNext.toLocaleString('en-US') + ' TO ' + rank.next.name
-      : 'MAX RANK';
+      ? rank.toNext.toLocaleString('en-US') + ' ' + tr('toRank') + ' ' + rank.next.name
+      : tr('maxRank');
   }
   if (ui.rankFill) {
     ui.rankFill.style.width = Math.round(rank.progress * 100) + '%';
@@ -623,14 +753,18 @@ function renderProfileUI() {
   if (ui.contractList) {
     const list = p.challenges.list;
     if (!list.length) {
-      ui.contractList.innerHTML = '<div class="contractRow"><div class="contractMeta">CONTRACTS REFRESH AT MIDNIGHT</div></div>';
+      ui.contractList.innerHTML = '<div class="contractRow"><div class="contractMeta">' +
+        (vi ? 'NHIỆM VỤ LÀM MỚI LÚC 00:00' : 'CONTRACTS REFRESH AT MIDNIGHT') + '</div></div>';
     } else {
       ui.contractList.innerHTML = list.map((c) => {
+        const def = CHALLENGE_POOL.find((d) => d.id === c.id);
+        const cName = vi && def && def.nameVi ? def.nameVi : c.name;
         const pct = Math.round(Math.min(1, c.progress / c.goal) * 100);
-        const meta = c.done ? 'COMPLETE · +' + c.reward + ' AURA'
+        const doneWord = vi ? 'HOÀN THÀNH' : 'COMPLETE';
+        const meta = c.done ? doneWord + ' · +' + c.reward + ' AURA'
           : Math.floor(c.progress) + ' / ' + c.goal + ' · +' + c.reward + ' AURA';
         return '<div class="contractRow' + (c.done ? ' done' : '') + '">' +
-          '<div class="contractTop"><span class="contractName">' + escapeHtml(c.name) + '</span>' +
+          '<div class="contractTop"><span class="contractName">' + escapeHtml(cName) + '</span>' +
           '<b class="contractReward">✦ ' + c.reward + '</b></div>' +
           '<div class="contractBar"><i style="width:' + pct + '%"></i></div>' +
           '<div class="contractMeta">' + meta + '</div></div>';
@@ -645,12 +779,14 @@ function renderArmory() {
   const p = ensureProfile();
   const ui = PROFILE_UI;
   if (!ui.armoryGrid) return;
+  const vi = typeof isVi === 'function' && isVi();
 
   if (ui.armoryAura) ui.armoryAura.textContent = p.auraBank.toLocaleString('en-US');
 
   const sections = [
-    { kind: 'operator', title: 'OPERATORS', items: OPERATOR_PRESETS, list: p.unlocked.operators },
-    { kind: 'trail', title: 'TRAILS', items: TRAIL_PRESETS, list: p.unlocked.trails },
+    { kind: 'operator', title: tr('secOperators'), items: OPERATOR_PRESETS, list: p.unlocked.operators },
+    { kind: 'trail', title: tr('secTrails'), items: TRAIL_PRESETS, list: p.unlocked.trails },
+    { kind: 'finisher', title: tr('secFinishers'), items: FINISHER_PRESETS, list: p.unlocked.finishers },
   ];
 
   let html = '';
@@ -667,12 +803,12 @@ function renderArmory() {
 
       if (equipped) {
         action = 'none';
-        label = 'EQUIPPED';
+        label = tr('equipped');
         cls = 'equipped';
         disabled = true;
       } else if (owned) {
         action = 'equip';
-        label = 'EQUIP';
+        label = tr('equip');
         cls = 'equip';
       } else if (p.auraBank < item.cost) {
         disabled = true;
@@ -680,12 +816,20 @@ function renderArmory() {
 
       const preview = sec.kind === 'operator'
         ? '<canvas class="armoryPortrait" width="96" height="96" data-operator-portrait="' + id + '" aria-hidden="true"></canvas>'
-        : '<div class="armoryPreview" style="--c:' + item.color + ';--l:' + item.light + '"></div>';
+        : sec.kind === 'finisher'
+          ? '<div class="armoryPreview finisherPreview" style="--c:' + item.color + ';--l:' + item.light + '"><span>✦</span></div>'
+          : '<div class="armoryPreview" style="--c:' + item.color + ';--l:' + item.light + '"></div>';
+      const typeLabel = sec.kind === 'operator'
+        ? (item.planet + ' · ' + item.planetType.toUpperCase())
+        : sec.kind === 'finisher'
+          ? (vi ? 'HIỆU ỨNG KẾT LIỄU' : 'KILL FINISHER VFX')
+          : (vi ? 'VẾT CHẠY' : 'MOVEMENT TRAIL');
+      const descText = vi && item.descVi ? item.descVi : item.desc;
       html += '<div class="armoryCard' + (equipped ? ' isEquipped' : '') + '">' +
         preview +
         '<div class="armoryName">' + item.name + '</div>' +
-        '<div class="armoryType">' + (sec.kind === 'operator' ? (item.planet + ' · ' + item.planetType.toUpperCase()) : 'MOVEMENT TRAIL') + '</div>' +
-        '<div class="armoryDesc">' + item.desc + '</div>' +
+        '<div class="armoryType">' + typeLabel + '</div>' +
+        '<div class="armoryDesc">' + escapeHtml(descText) + '</div>' +
         '<button class="armoryBtn ' + cls + '" data-kind="' + sec.kind +
         '" data-id="' + id + '" data-action="' + action + '"' + (disabled ? ' disabled' : '') + '>' +
         label + '</button></div>';
@@ -699,18 +843,11 @@ function renderArmory() {
   }
 }
 
-function masteryLabel(kills) {
-  if (kills >= 50) return 'MASTER';
-  if (kills >= 25) return 'VETERAN';
-  if (kills >= 10) return 'MARKSMAN';
-  if (kills >= 1) return 'INITIATE';
-  return '—';
-}
-
 function renderCareer() {
   const p = ensureProfile();
   const ui = PROFILE_UI;
   if (!ui.career) return;
+  const vi = typeof isVi === 'function' && isVi();
 
   const rank = getRank(p.auraEarned);
   if (ui.careerRankBadge) {
@@ -723,8 +860,8 @@ function renderCareer() {
   if (ui.careerBank) ui.careerBank.textContent = p.auraBank.toLocaleString('en-US');
   if (ui.careerRankNext) {
     ui.careerRankNext.textContent = rank.next
-      ? rank.toNext.toLocaleString('en-US') + ' TO ' + rank.next.name
-      : 'MAX RANK';
+      ? rank.toNext.toLocaleString('en-US') + ' ' + tr('toRank') + ' ' + rank.next.name
+      : tr('maxRank');
   }
   if (ui.careerRankFill) {
     ui.careerRankFill.style.width = Math.round(rank.progress * 100) + '%';
@@ -737,7 +874,18 @@ function renderCareer() {
     : null;
   const winRate = s.matches > 0 ? Math.round((s.wins / s.matches) * 100) : null;
   const perMatch = s.matches > 0 ? (s.kills / s.matches).toFixed(1) : null;
-  const stats = [
+  const stats = vi ? [
+    ['SỐ TRẬN', s.matches.toLocaleString('en-US')],
+    ['TOP 1', s.wins.toLocaleString('en-US')],
+    ['TỶ LỆ THẮNG', winRate === null ? '—' : winRate + '%'],
+    ['TỔNG HẠ GỤC', s.kills.toLocaleString('en-US')],
+    ['HẠ / TRẬN', perMatch === null ? '—' : perMatch],
+    ['SÁT THƯƠNG', s.damage.toLocaleString('en-US')],
+    ['ĐỘ CHÍNH XÁC', accuracy === null ? '—' : accuracy + '%'],
+    ['HẠNG CAO NHẤT', s.bestPlacement > 0 ? '#' + s.bestPlacement : '—'],
+    ['KỶ LỤC MẠNG', s.bestKills.toLocaleString('en-US')],
+    ['BẮN XA NHẤT', s.bestLongshot > 0 ? s.bestLongshot.toLocaleString('en-US') + 'm' : '—'],
+  ] : [
     ['MATCHES', s.matches.toLocaleString('en-US')],
     ['WINS', s.wins.toLocaleString('en-US')],
     ['WIN RATE', winRate === null ? '—' : winRate + '%'],
@@ -760,13 +908,18 @@ function renderCareer() {
     for (const key in WEAPONS) {
       const weapon = WEAPONS[key];
       const kills = Math.max(0, Math.floor(Number(p.weaponKills[key]) || 0));
+      const m = getWeaponMastery(kills);
       const pct = Math.round(Math.min(1, kills / 50) * 100);
       const color = weapon.color || '#5ee7ff';
+      const tierTxt = vi ? m.labelVi : m.label;
+      const perkTxt = vi ? m.perkVi : m.perk;
+      const goalTxt = m.nextMin ? (kills + ' / ' + m.nextMin) : (kills.toLocaleString('en-US') + ' MAX');
       html += '<div class="masteryRow' + (kills >= 50 ? ' maxed' : '') + '">' +
         '<div class="masteryTop">' +
         '<span class="masteryName" style="color:' + color + '">' + weapon.name + '</span>' +
-        '<span class="masteryLevel">' + masteryLabel(kills) + '</span>' +
-        '<span class="masteryKills">' + kills.toLocaleString('en-US') + '</span></div>' +
+        '<span class="masteryLevel" style="color:' + m.color + '">' + tierTxt + '</span>' +
+        (perkTxt ? '<span class="masteryPerk">' + perkTxt + '</span>' : '') +
+        '<span class="masteryKills">' + goalTxt + '</span></div>' +
         '<div class="masteryBar"><i style="width:' + pct + '%;--wc:' + color + '"></i></div></div>';
     }
     ui.careerWeapons.innerHTML = html;
@@ -794,6 +947,7 @@ function isSettingsOpen() {
 }
 
 function closeAllLobbyOverlays() {
+  if (typeof cancelBindListen === 'function') cancelBindListen();
   if (PROFILE_UI.armory) PROFILE_UI.armory.classList.add('hidden');
   if (PROFILE_UI.career) PROFILE_UI.career.classList.add('hidden');
   if (PROFILE_UI.settings) PROFILE_UI.settings.classList.add('hidden');
@@ -803,6 +957,7 @@ function closeAllLobbyOverlays() {
 
 function openArmory() {
   if (game.state !== 'menu') return;
+  if (typeof cancelBindListen === 'function') cancelBindListen();
   if (PROFILE_UI.career) PROFILE_UI.career.classList.add('hidden');
   if (PROFILE_UI.settings) PROFILE_UI.settings.classList.add('hidden');
   ensureDailyChallenges();
@@ -820,6 +975,7 @@ function closeArmory() {
 
 function openCareer() {
   if (game.state !== 'menu') return;
+  if (typeof cancelBindListen === 'function') cancelBindListen();
   if (PROFILE_UI.armory) PROFILE_UI.armory.classList.add('hidden');
   if (PROFILE_UI.settings) PROFILE_UI.settings.classList.add('hidden');
   ensureDailyChallenges();
@@ -842,12 +998,15 @@ function openSettings() {
   if (typeof updateGraphicsQualityUI === 'function') updateGraphicsQualityUI();
   if (typeof updateAudioSettingsUI === 'function') updateAudioSettingsUI();
   if (typeof updateFpsToggleUI === 'function') updateFpsToggleUI();
+  if (typeof updateCrosshairSettingsUI === 'function') updateCrosshairSettingsUI();
+  if (typeof updateKeybindUI === 'function') updateKeybindUI();
   if (PROFILE_UI.settings) PROFILE_UI.settings.classList.remove('hidden');
   setActiveLobbyTab('settings');
   if (typeof sfx === 'function') sfx('ui');
 }
 
 function closeSettings() {
+  if (typeof cancelBindListen === 'function') cancelBindListen();
   if (PROFILE_UI.settings) PROFILE_UI.settings.classList.add('hidden');
   setActiveLobbyTab('play');
   renderProfileUI();
